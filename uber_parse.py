@@ -23,7 +23,7 @@ class UberParse(object):
         self.merge_dfs(data)
         self.df = pd.concat(self.dfs)
         self.df.drop(['price_details'],axis=1,inplace=True)
-        self.df.to_csv('data/uber_data.csv', index=False, encoding='utf-8')
+        self.df.to_csv('data/uber_data_{}.csv'.format(self.filename.split('_')[1].split('.')[0]), index=False, encoding='utf-8')
 
     def parse_json(self):
         """
@@ -61,6 +61,6 @@ class UberParse(object):
         self.dfs = dfs
 
 if __name__ == '__main__':
-    filename = 'uber4_33016.json'
+    filename = sys.argv[1]
     up = UberParse(filename=filename)
     up.run()

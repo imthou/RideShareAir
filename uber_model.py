@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import cPickle as pickle
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.grid_search import GridSearchCV
@@ -22,16 +23,27 @@ class UberModel(object):
         df.set_index('record_time', inplace=True)
         df.index = df.index - pd.Timedelta(hours=7)
         df['hour'] = df.index.hour
-        df['day'] = df.index.day
         df['date'] = df.index.date
         df['dayofweek'] = df.index.dayofweek
         df['weekofyear'] = df.index.weekofyear
+
+        hourly = df.groupby(['date','hour','city','display_name']).mean().reset_index()
+        hourly['record_time'] = pd.to_datetime(hourly['date'].astype(str) + ' ' + hourly['hour'].astype(str) + ":00:00")
+        hourly.set_index('record_time', inplace=True)
+
+        # df['dayofmonth'] = df.index.day
         # df['trip_minutes'] = df['trip_duration'] / 60.
-        features = ['city','display_name','trip_duration', 'trip_distance','avg_price_est','surge_minimum_price','surge_multiplier','capacity', 'base_price', 'base_minimum_price', 'cost_per_minute', 'cost_per_distance', 'cancellation_fee', 'hour', 'dayofweek','weekofyear']
-        df = df[features]
         # df['avg_price_per_min'] = df['avg_price_est'] / df['trip_minutes']
-        df = pd.get_dummies(df, columns=['city','display_name'])
-        self.df = df.dropna()
+
+        # consider changing the cross validation paradigm to increase more lag
+        # features to use: trip distance, trip duration, pickup_estimate (maybe)
+        # not constant features: 'surge_minimum_price','capacity','base_price', 'base_minimum_price','cost_per_minute', 'cost_per_distance','cancellation_fee', 'service_fee'
+
+        # df['lag_1'] = df['avg_price_est'].diff(periods=1)
+
+        features = ['avg_price_est','city','display_name','trip_duration', 'trip_distance','pickup_estimate','hour','dayofweek','weekofyear'] #,'lag_1','surge_multiplier'
+        hourly = pd.get_dummies(hourly[features], columns=['city','display_name','hour','dayofweek']).drop(['city_chicago','display_name_uberASSIST','hour_0','dayofweek_0'], axis=1)
+        self.df = hourly.dropna()
         self.kfold_indices = []
 
     def make_holdout_split(self, leaveout=1, weekly=False):
@@ -83,15 +95,6 @@ class UberModel(object):
             self.kfold_indices.append((self.train_indices, self.test_indices))
         return self.kfold_indices
 
-    def score_model_on_holdout(self, X_hold, y_hold):
-        """
-        Output: MSE
-
-        Score our model based on holdout set
-        """
-        self.y_pred = self.estimator.predict(X_hold)
-        return mean_squared_error(y_true=y_hold, y_pred=self.y_pred)
-
     def format_guess(self):
         """
         Output: Numpy Array
@@ -107,24 +110,25 @@ class UberModel(object):
         X_g = X_g.mean().values.reshape(1,-1)
         self.X_g = X_g
 
-    def format_df_for_guessing(self, df2):
+    def make_forecast(self, model, name):
         """
         Output: DataFrame
 
-        Format the dataframe for prediction
+        Train on the holdout set and make predictions for the next week
         """
-        self.ho = df2.iloc[ubm.split:].reset_index()
-        self.ho = self.ho.join(pd.DataFrame(self.y_pred, columns=['y_pred']))
-        n_cols = []
-        for column in df2.columns:
-            if 'display_name_' in column:
-                n_cols.append(column.split('display_name_')[1])
-            elif 'city_' in column:
-                n_cols.append(column.split('city_')[1])
-            else:
-                n_cols.append(column)
-        df2.columns = n_cols
-        self.df2 = df2
+        X_hold = self.hold_set[self.hold_set.columns[1:]]
+        y_hold = self.hold_set['avg_price_est']
+        model.fit(X_hold, y_hold)
+        self.X_forecast = X_hold.copy()
+        # assumes weekofyear is increasing
+        self.X_forecast['weekofyear'] = self.X_forecast['weekofyear'].apply(lambda x: x+1)
+        self.X_forecast.index = self.X_forecast.index + pd.Timedelta(days=7)
+        self.y_forecast = model.predict(self.X_forecast)
+        self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
+        self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
+        saved_filename = "data/{}_forecast.csv".format(name)
+        self.y_forecast.to_csv(saved_filename)
+        print "saved prediction values to {}".format(saved_filename)
 
     def perform_grid_search_rf(self, X_train, X_test, y_train, y_test, custom_cv):
         """
@@ -166,16 +170,22 @@ class UberModel(object):
 
         return rf_gridsearch, best_rf_model, y_pred
 
+    def print_feature_importance(self, X_train, best_rf_model):
         """
-        best parameters: {'max_features': None, 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 10}
-        RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
-           max_features=None, max_leaf_nodes=None, min_samples_leaf=1,
-           min_samples_split=6, min_weight_fraction_leaf=0.0,
-           n_estimators=10, n_jobs=1, oob_score=False, random_state=None,
-           verbose=0, warm_start=False)
-        MSE with best rf: 0.0696791534095
-        MSE with default param rf: 0.224983742868
+        Prints the important features
         """
+        for feature in sorted(zip(X_train.columns,best_rf_model.feature_importances_), key=lambda x:x[1])[::-1]:
+            print feature
+
+    def pickle_model(self, model, name):
+        """
+        Output: Saved Model
+
+        Pickles our model for later use
+        """
+        with open("rideshare_app/data/{}.pkl".format(name), 'w') as f:
+            pickle.dump(model, f)
+        print "{} is pickled.".format(name)
 
 def plot_prediction_true_res(y_pred):
     """
@@ -186,17 +196,20 @@ def plot_prediction_true_res(y_pred):
     y_preds = pd.DataFrame(y_pred, index=ubm.hold_set.index, columns=['y_pred'])
     data = pd.concat([ubm.hold_set,y_preds], axis=1)
     # print data.columns
-    cities = ['city_denver','city_sf','city_seattle','city_chicago','city_ny']
+    cities = ['city_denver','city_sf','city_seattle','city_ny','city_chicago']
     cartypes = ['display_name_uberX','display_name_uberXL','display_name_uberBLACK','display_name_uberSUV']
     for city in cities:
         for cartype in cartypes:
             plt.cla()
-            sub_data = data[(data[city] == 1) & (data[cartype] == 1)].resample('10T')
+            if city != 'city_chicago':
+                sub_data = data[(data[city] == 1) & (data[cartype] == 1)] #.resample('10T')
+            else:
+                sub_data = data[(data[cities[0]] == 0) & (data[cities[1]] == 0) & (data[cities[2]] == 0) & (data[cities[3]] == 0) & (data[cartype] == 1)] #.resample('10T')
             fig, ax = plt.subplots(2,1,figsize=(20,10))
 
             ax[0].plot_date(sub_data.index.to_pydatetime(), sub_data['avg_price_est'].values, 'o--', label='true data');
             ax[0].plot_date(sub_data.index.to_pydatetime(), sub_data['y_pred'].values, '-', label='prediction', alpha=0.8)
-            ax[0].xaxis.set_minor_locator(HourLocator(byhour=range(24), interval=1))
+            ax[0].xaxis.set_minor_locator(HourLocator(byhour=range(24), interval=2))
             ax[0].xaxis.set_minor_formatter(DateFormatter('%H'))
             ax[0].xaxis.set_major_locator(WeekdayLocator(byweekday=range(7), interval=1))
             ax[0].xaxis.set_major_formatter(DateFormatter('\n\n%a\n%D'))
@@ -207,9 +220,13 @@ def plot_prediction_true_res(y_pred):
             ax[0].set_title("Y Predictions vs Y Trues For {}, {}".format(cartype.split('_')[-1],city.split('_')[-1]))
 
             data['resid'] = data['avg_price_est'] - data['y_pred']
-            resid = data[(data[city] == 1) & (data[cartype] == 1)]['resid'].resample('10T')
+            if city != 'city_chicago':
+                resid = data[(data[city] == 1) & (data[cartype] == 1)]['resid'] #.resample('10T')
+            else:
+                resid = data[(data[cities[0]] == 0) & (data[cities[1]] == 0) & (data[cities[2]] == 0) & (data[cities[3]] == 0) & (data[cartype] == 1)]['resid'] #.resample('10T')
+
             ax[1].plot_date(resid.index.to_pydatetime(), resid.values, 'o', label='residuals', alpha=0.3);
-            ax[1].xaxis.set_minor_locator(HourLocator(byhour=range(24), interval=1))
+            ax[1].xaxis.set_minor_locator(HourLocator(byhour=range(24), interval=2))
             ax[1].xaxis.set_minor_formatter(DateFormatter('%H'))
             ax[1].xaxis.set_major_locator(WeekdayLocator(byweekday=range(7), interval=1))
             ax[1].xaxis.set_major_formatter(DateFormatter('\n\n%a\n%D'))
@@ -220,10 +237,11 @@ def plot_prediction_true_res(y_pred):
 
             plt.tight_layout()
             plt.savefig('plots/pred_int_{}_{}.png'.format(cartype.split('_')[-1],city.split('_')[-1]))
+            print "finished plot {}, {}".format(cartype.split('_')[-1],city.split('_')[-1])
             plt.close('all')
 
 if __name__ == '__main__':
-    filename = 'data/organized_uber.csv'
+    filename = 'data/organized_uber_41116.csv'
     ubm = UberModel(filename)
 
     # Subsetting by week -> array([ 7,  8,  9, 10, 11, 12, 13], dtype=int32)
@@ -231,7 +249,7 @@ if __name__ == '__main__':
     X_train, X_hold, y_train, y_hold = ubm.make_holdout_split(leaveout=1, weekly=True)
 
     custom_cv = ubm.get_kfold_timeseries_indices(X_train, y_train, lag=1, ahead=1)
-    rf = RandomForestRegressor(n_estimators=10)
+
     X_train.pop('record_time')
     y_train.pop('record_time')
     X_hold.pop('record_time')
@@ -240,18 +258,16 @@ if __name__ == '__main__':
     ### GridSearchCV for best parameters for RF
     rf_gridsearch, best_rf_model, y_pred = ubm.perform_grid_search_rf(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), custom_cv)
 
-    plot_prediction_true_res(y_pred)
+    # plot_prediction_true_res(y_pred)
 
+    ubm.pickle_model(best_rf_model, name='model2_wo_surgemulti')
 
+    ubm.make_forecast(best_rf_model, name='model2_wo_surgemulti')
 
     ### Cross val score with baseline RF
+    # rf = RandomForestRegressor(n_estimators=10)
     # mses = -cross_val_score(estimator=rf, X=X_train, y=y_train.values.reshape(-1), cv=custom_cv, scoring='mean_squared_error', n_jobs=-1)
     # print "CV on baseline RF with MSE:", zip(X_train['weekofyear'].unique(),mses)
-
-
-    # ubm.estimate_with_kfold(X_train, y_train, custom_cv, best_rf)
-    # plt.close("all")
-
 
 
     # be able to ask your model to predict what the price will be based on the city and hour time of travel and type of transport
@@ -261,38 +277,160 @@ if __name__ == '__main__':
     # ubm.format_guess()
     # print ubm.estimator.predict(ubm.X_g)
 
-    # for feature in sorted(zip(X_train.columns,best_rf_model.feature_importances_), key=lambda x:x[1])[::-1]:
-    #     print feature
+    ubm.print_feature_importance(X_train, best_rf_model)
+
     """
-    ('surge_minimum_price', 0.65043672112895989)
-    ('trip_distance', 0.11235756811775592)
-    ('base_minimum_price', 0.071450278052160837)
-    ('trip_duration', 0.047432957778742471)
-    ('surge_multiplier', 0.034332547690270152)
-    ('city_chicago', 0.024567895868857846)
-    ('base_price', 0.018963870464960432)
-    ('display_name_uberFAMILY', 0.017424171748303525)
-    ('cost_per_minute', 0.010999549185609681)
-    ('cost_per_distance', 0.004134905177000733)
-    ('display_name_uberSELECT', 0.0030500966024416083)
-    ('cancellation_fee', 0.001522139675136759)
-    ('capacity', 0.0010951072457122924)
-    ('display_name_uberXL', 0.00057176839751634369)
-    ('display_name_uberPEDAL', 0.00045068101017040237)
-    ('display_name_uberBLACK', 0.00041177417973595762)
-    ('hour', 0.00022524063810545856)
-    ('city_sf', 0.00020022229976842952)
-    ('city_seattle', 0.00010769207884227673)
-    ('weekofyear', 8.5535660336395644e-05)
-    ('city_ny', 6.4366108496060823e-05)
-    ('dayofweek', 6.3377211253662363e-05)
-    ('city_denver', 4.3400773728544319e-05)
-    ('display_name_uberWARMUP', 4.3102648635231049e-06)
-    ('display_name_uberX', 3.2076590778188309e-06)
-    ('display_name_uberSUV', 5.6279930623436635e-07)
-    ('display_name_uberWAV', 4.2436189333563819e-08)
-    ('display_name_uberESPANOL', 6.1808657326089895e-09)
-    ('display_name_uberASSIST', 3.5658315670680356e-09)
-    ('display_name_uberTAXI', 0.0)
-    ('display_name_uberTAHOE', 0.0)
+    best parameters: {'max_features': None, 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 10}
+    RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
+       max_features=None, max_leaf_nodes=None, min_samples_leaf=1,
+       min_samples_split=6, min_weight_fraction_leaf=0.0,
+       n_estimators=10, n_jobs=1, oob_score=False, random_state=None,
+       verbose=0, warm_start=False)
+    MSE with best rf: 0.0696791534095
+    MSE with default param rf: 0.224983742868
+
+    Without leakage variables:
+
+    best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 10.9785314346
+    MSE with default param rf: 15.322677252
+
+    Without lag_1 variable:
+
+    best parameters: {'max_features': 'log2', 'min_samples_split': 6, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 10}
+    MSE with best rf: 46.900728035
+    MSE with default param rf: 44.0100363882
+
+    With cv lag of 5:
+
+    best parameters: {'max_features': 'log2', 'min_samples_split': 7, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 46.158427494
+    MSE with default param rf: 56.2259376978
+
+    -- try to resample by hour but still include all the categorical variables
+
+    With hourly resampling and cv lag of 2:
+
+    best parameters: {'max_features': 'sqrt', 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 39.3497185302
+    MSE with default param rf: 94.9461884732
+
+    With hourly resampling and cv lag of 1:
+
+    best parameters: {'max_features': 'sqrt', 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 200}
+    MSE with best rf: 36.5273036401
+    MSE with default param rf: 60.2200781633
+
+    -- go back and see what other features can you include that is mostly constant through the week
+
+    Modified holdout set to include week 12 and 13:
+
+    best parameters: {'max_features': None, 'min_samples_split': 7, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 280.266058956
+    MSE with default param rf: 304.215061729
+
+    With surge_multiplier:
+
+    best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 15.51976143
+    MSE with default param rf: 32.4664843472
+
+    ('display_name_uberSUV', 0.29000892463099914)
+    ('trip_distance', 0.17669217696686926)
+    ('display_name_uberBLACK', 0.1549772144537914)
+    ('trip_duration', 0.12605338196387572)
+    ('surge_multiplier', 0.071224937402909513)
+    ('display_name_uberWAV', 0.064931857129935586)
+    ('display_name_uberX', 0.026107336328640759)
+    ('display_name_uberXL', 0.020264040684914435)
+    ('display_name_uberSELECT', 0.017277217298207182)
+    ('city_ny', 0.017257763698162489)
+    ('display_name_uberESPANOL', 0.014434691681362639)
+    ('city_seattle', 0.0094182122349883279)
+    ('pickup_estimate', 0.0040876569743090261)
+
+    Retrieved data up to week 14:
+
+    best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 0.942149836266
+    MSE with default param rf: 10.9731377293
+
+    Without surge_multiplier:
+
+    best parameters: {'max_features': 'sqrt', 'min_samples_split': 4, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
+    MSE with best rf: 56.7717152006
+    MSE with default param rf: 64.234876547
+
+    ('display_name_uberSUV', 0.2048637442374508)
+    ('trip_duration', 0.13164410221511086)
+    ('pickup_estimate', 0.10503238907363363)
+    ('display_name_uberWAV', 0.10330720494351724)
+    ('trip_distance', 0.097831781783953228)
+    ('display_name_uberX', 0.085968653767959577)
+    ('display_name_uberBLACK', 0.055809745694839055)
+    ('city_seattle', 0.041266396367005236)
+    ('city_ny', 0.035409041602259689)
+    ('city_denver', 0.01865789832987827)
+    ('display_name_uberXL', 0.018290636329722696)
+    ('display_name_uberESPANOL', 0.01731926767473092)
+    ('display_name_uberSELECT', 0.016296225095864675)
+    ('city_sf', 0.013362568284479584)
+    ('display_name_uberFAMILY', 0.011900193110712545)
+    ('display_name_uberTAXI', 0.0053023498845518368)
+    ('display_name_uberPEDAL', 0.0041246772754761048)
+    """
+
+    """
+    With surge multiplier, week 14 predictions:
+    
+    ('display_name_uberSUV', 0.28156529820578796)
+    ('trip_distance', 0.17386787481727198)
+    ('display_name_uberBLACK', 0.15105326480490774)
+    ('trip_duration', 0.12405091650062343)
+    ('surge_multiplier', 0.095744259344206009)
+    ('display_name_uberWAV', 0.06128319437327865)
+    ('display_name_uberX', 0.026588448626477423)
+    ('display_name_uberXL', 0.019741683016970161)
+    ('display_name_uberSELECT', 0.016919647962355146)
+    ('city_ny', 0.016547926784837016)
+    ('display_name_uberESPANOL', 0.015035628528900597)
+    ('city_seattle', 0.0092183694111987111)
+    ('city_sf', 0.0037929761758299907)
+    ('pickup_estimate', 0.0016991033673227963)
+    ('display_name_uberFAMILY', 0.0013389520832636254)
+    ('city_denver', 0.00029488467750748992)
+    ('display_name_uberTAXI', 0.00019888029444719031)
+    ('display_name_uberWARMUP', 0.00015433717504211345)
+    ('weekofyear', 0.0001082871211898807)
+    ('dayofweek_2', 0.00010365204867123911)
+    ('dayofweek_4', 9.6276784885273946e-05)
+    ('hour_6', 7.7131736607251585e-05)
+    ('hour_7', 6.0289433406320183e-05)
+    ('display_name_uberPEDAL', 5.6811952373247677e-05)
+    ('hour_4', 4.8798261917506261e-05)
+    ('dayofweek_3', 4.8087045900860311e-05)
+    ('display_name_uberTAHOE', 3.2908466222634051e-05)
+    ('hour_17', 2.6315613136821515e-05)
+    ('hour_11', 2.6295081924580555e-05)
+    ('hour_15', 2.3549520986304168e-05)
+    ('hour_5', 2.2416132868638021e-05)
+    ('dayofweek_1', 2.1325986219720821e-05)
+    ('hour_16', 1.6482223851737059e-05)
+    ('hour_12', 1.3402264159827176e-05)
+    ('hour_14', 1.3103875331400295e-05)
+    ('hour_18', 1.2745491510340055e-05)
+    ('hour_2', 1.1210860588588259e-05)
+    ('hour_19', 1.1101405245830553e-05)
+    ('hour_8', 9.8018692204899525e-06)
+    ('dayofweek_6', 9.6259623977638091e-06)
+    ('dayofweek_5', 8.8389207543897053e-06)
+    ('hour_20', 8.6190750627970933e-06)
+    ('hour_13', 7.514480751485061e-06)
+    ('hour_3', 7.2361288056986364e-06)
+    ('hour_22', 5.630772279482073e-06)
+    ('hour_9', 5.3823984167670465e-06)
+    ('hour_21', 4.1433315946478496e-06)
+    ('hour_1', 3.9336987278618334e-06)
+    ('hour_10', 2.3299191862041496e-06)
+    ('hour_23', 1.1059855764074888e-06)
     """

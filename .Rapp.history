@@ -1,0 +1,377 @@
+getwd()
+library(forecast)
+auto.arima(WWWusage)
+df = read.csv(file="data/week8_train_uber.csv")
+df
+df.head()
+head(df)
+df.describe()
+describe(df)
+summary(df)
+structure(df)
+clear
+head(df)
+avg_price_est = frame(df$avg_price_est)
+avg_price_est
+head(df)
+df[1]
+columns
+names
+names(df)
+df['avg_price_est']
+price = df['avg_price_est']
+price
+history
+history()
+price
+fit = auto.arima(price)
+fit
+exog = df[['avg_price_est']]
+head(exog)
+head(df)
+drop
+features = ['avg_price_est',#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'weekofyear',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAHOE',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL']
+features = c(['avg_price_est',#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'weekofyear',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAHOE',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL'])
+features = c('avg_price_est',#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'weekofyear',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAHOE',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL')
+features
+features = c(#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'weekofyear',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAHOE',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL')
+features = c(#
++  'trip_duration',#
++  'trip_distance',#
++  'weekofyear',#
++  'pickup_estimate',#
++  'surge_multiplier',#
++  'city_denver',#
++  'city_ny',#
++  'city_seattle',#
++  'city_sf',#
++  'display_name_uberBLACK',#
++  'display_name_uberESPANOL',#
++  'display_name_uberFAMILY',#
++  'display_name_uberPEDAL',#
++  'display_name_uberSELECT',#
++  'display_name_uberSUV',#
++  'display_name_uberTAHOE',#
++  'display_name_uberTAXI',#
++  'display_name_uberWARMUP',#
++  'display_name_uberWAV',#
++  'display_name_uberX',#
++  'display_name_uberXL')
+features = c(#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'weekofyear',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAHOE',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL')
+features
+df[features]
+head(df)
+features
+exog = df[features]
+head(exog)
+fit = auto.arima(price, xreg=exog)
+price
+ts(price)
+df$record_time
+head(df$record_time)
+ts(price, start=df$record_time)
+ts(price, start=2016)
+head(ts(price, start=2013))
+head(ts(price, start=2016-02-22))
+head(ts(price, start=2016-02-22, freq=12))
+ts(c(5723.375,5663.500,5944.000,6951.385,6950.875,6744.611,7684.353,7759.700,#
+  6786.650, 6472.947,5382.917,5546.909,5937.556, 5261.500, 5757.700, 5629.562, 7849.375, #
+  6645.263, 7488.045, 7500.409, 6476.167, 6253.571, 6414.000, 5631.545),start=2013,f=12)
+ts(price, start=2016-02-22, freq=24)
+as.xts
+xts
+fit = auto.arima(price, xreg=exog)
+auto.arima(WWWusage)
+fit = auto.arima(price)
+fit
+head(exog)
+ex = as.matrix(exog)
+head(exog)
+head(ex)
+fit = auto.arima(price, xreg=ex)
+dim(exog)
+dim(na.omit(exog))
+str(exog)
+head(df)
+ts()
+price
+ts(price, start=c(2016,3,30), freq=24)
+help(auto.arima)
+type
+class(price)
+class(ts(price))
+price = ts(price)
+ex = ts(ex)
+auto.arima(price, xreg=ex)
+auto.arima(price)
+head(ex)
+class(ex)
+auto.arima(price, xreg=ex$pickup_estimate)
+head(ex)
+ex[,"pickup_estimate"]
+auto.arima(price, xreg=ex[:'pickup_estimate'])
+auto.arima(price, xreg=ex[,'pickup_estimate'])
+auto.arima(price, xreg=exog[,'pickup_estimate'])
+auto.arima(price, xreg=exog['','pickup_estimate'])
+features
+auto.arima(price, xreg=exog['trip_duration','pickup_estimate'])
+auto.arima(price, xreg=exog[]['trip_duration','pickup_estimate']])
+auto.arima(price, xreg=exog[['trip_duration','pickup_estimate']])
+exog[['trip_duration','pickup_estimate']]
+exog
+class(eog)
+class(exog)
+names(exog)
+exog[['trip_duration','pickup_estimate']]
+df[['trip_duration','pickup_estimate']]
+exog[c('trip_duration','pickup_estimate')]
+auto.arima(price, xreg=exog[c('trip_duration','pickup_estimate')])
+features
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance')])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','weekofyear')])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate')])
+features
+paste
+paste()
+features = c(#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAHOE',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL')
+features
+exog = df[features]
+auto.arima(price, xreg=exog)
+head(exog)
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance')])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier')])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver')])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf')])
+features
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV")])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV")], D=1)
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV")], seasonal=TRUE)
+features
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV","display_name_uberTAHOE")])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV","display_name_uberTAXI")])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV","display_name_uberTAXI","display_name_uberWARMUP")])
+auto.arima(price, xreg=exog[c('trip_duration','trip_distance','pickup_estimate','surge_multiplier','city_denver','city_ny','city_seattle','city_sf',"display_name_uberBLACK","display_name_uberESPANOL","display_name_uberFAMILY","display_name_uberPEDAL","display_name_uberSELECT","display_name_uberSUV","display_name_uberTAXI","display_name_uberWARMUP","display_name_uberWAV","display_name_uberX","display_name_uberXL")])
+head(df)
+features = c(#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL',#
+ 'weekofyear')
+features
+auto.arima(price, xreg=df[features])
+features = c(#
+ 'trip_duration',#
+ 'trip_distance',#
+ 'pickup_estimate',#
+ 'surge_multiplier',#
+ 'city_denver',#
+ 'city_ny',#
+ 'city_seattle',#
+ 'city_sf',#
+ 'display_name_uberBLACK',#
+ 'display_name_uberESPANOL',#
+ 'display_name_uberFAMILY',#
+ 'display_name_uberPEDAL',#
+ 'display_name_uberSELECT',#
+ 'display_name_uberSUV',#
+ 'display_name_uberTAXI',#
+ 'display_name_uberWARMUP',#
+ 'display_name_uberWAV',#
+ 'display_name_uberX',#
+ 'display_name_uberXL')
+auto.arima(price, xreg=df[features])
+fit = auto.arima(price, xreg=df[features])
+plot(forecast(fit,h=20))
+fit
+plot(fit)
+plot(forecast(fit))
+class(fit)
+plot(forecast(fit))
+forecast(fit)
+help(forecast)
+residuals
+residuals(fit)
+plot(residuals(fit))
+accuracy(fit)
+fitted(fit)
+plot(fitted(fit))
+forecast(fit, xreg=exog)
+exog = df[features]
+forecast(fit, xreg=exog)
+plot(_)
+_
+plot(forecast(fit, xreg=exog))
+help(auto.arima)
+X_test
+test_set = read.csv('data/week9_test_uber.csv')
+X_test = test_set[features]
+head(X_test)
+y_pred = forecast(fit, xreg=X_test)
+head(y_pred)
+length(y_pred)
+tail(y_pred)
+y_pred
+dim(X_test)
+dim(y_pred)
+dim(y_pred[0])
+y_pred
+class(y_pred)
+y_pred['Point Forecast']
+y_pred.iloc
+names(y_pred)
+y_pred['residuals']
+class(y_pred)
+names(y_pred)
+head(X_test)
+y_pred['x']
+vector(y_pred['x'])
+class(y_pred['x'])
+exit
+quit
+quit()
+library(forecast)
+help(auto.arima)
+library(forecast)
+help(auto.arima)
+help(forecast)

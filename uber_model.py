@@ -9,6 +9,7 @@ from sklearn.grid_search import GridSearchCV
 from sklearn.cross_validation import cross_val_score
 from sklearn.metrics import mean_squared_error
 from matplotlib.dates import MonthLocator, WeekdayLocator, DateFormatter, HourLocator
+from sklearn.linear_model import RidgeCV, LassoCV, ElasticNetCV
 
 class UberModel(object):
     """
@@ -126,49 +127,42 @@ class UberModel(object):
         self.y_forecast = model.predict(self.X_forecast)
         self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
         self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
-        saved_filename = "data/{}_forecast.csv".format(name)
+        saved_filename = "rideshare_app/data/{}_forecast.csv".format(name)
         self.y_forecast.to_csv(saved_filename)
         print "saved prediction values to {}".format(saved_filename)
 
-    def perform_grid_search_rf(self, X_train, X_test, y_train, y_test, custom_cv):
+    def perform_grid_search(self, X_train, X_test, y_train, y_test, estimator, custom_cv, params):
         """
         Output: Best model
 
         Perform grid search on all parameters of models to find the model that performs the best through cross-validation
         """
-
-        random_forest_grid = {'n_estimators': [10, 100, 200],
-                                'criterion': ['mse'],
-                                'min_samples_split': [2, 4, 6, 7],
-                                'min_samples_leaf': [1, 2],
-                                'max_features': ['sqrt',None,'log2']}
-
-        rf_gridsearch = GridSearchCV(RandomForestRegressor(),
-                                     random_forest_grid,
+        gridsearch = GridSearchCV(estimator,
+                                     params,
                                      n_jobs=-1,
                                      verbose=True,
                                      scoring='mean_squared_error',
                                      cv=custom_cv)
 
-        rf_gridsearch.fit(X_train, y_train)
+        gridsearch.fit(X_train, y_train)
 
-        print "best parameters:", rf_gridsearch.best_params_
+        print "best parameters {}: {}".format(estimator.__class__.__name__, gridsearch.best_params_)
 
-        best_rf_model = rf_gridsearch.best_estimator_
+        best_model = gridsearch.best_estimator_
 
-        y_pred = best_rf_model.predict(X_test)
+        y_pred = best_model.predict(X_test)
 
-        print "MSE with best rf:", mean_squared_error(y_true=y_test, y_pred=y_pred)
+        print "MSE with best {}: {}".format(estimator.__class__.__name__, mean_squared_error(y_true=y_test, y_pred=y_pred))
 
-        rf = RandomForestRegressor()
+        base_est = estimator
 
         idx = custom_cv[-1][1]
         rf.fit(X_train.iloc[idx], y_train[idx])
-        base_y_pred = rf.predict(X_test)
+        base_y_pred = base_est.predict(X_test)
 
-        print "MSE with default param rf:", mean_squared_error(y_true=y_test, y_pred=base_y_pred)
+        print "MSE with default param:", mean_squared_error(y_true=y_test, y_pred=base_y_pred)
 
-        return rf_gridsearch, best_rf_model, y_pred
+        return gridsearch, best_model, y_pred
 
     def print_feature_importance(self, X_train, best_rf_model):
         """
@@ -256,13 +250,18 @@ if __name__ == '__main__':
     y_hold.pop('record_time')
 
     ### GridSearchCV for best parameters for RF
-    rf_gridsearch, best_rf_model, y_pred = ubm.perform_grid_search_rf(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), custom_cv)
+    params = {'n_estimators': [10, 100, 200],
+                            'criterion': ['mse'],
+                            'min_samples_split': [2, 4, 6, 7],
+                            'min_samples_leaf': [1, 2],
+                            'max_features': ['sqrt',None,'log2']}
+    gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), RandomForestRegressor(), custom_cv, params)
 
     # plot_prediction_true_res(y_pred)
 
-    ubm.pickle_model(best_rf_model, name='model2_wo_surgemulti')
-
-    ubm.make_forecast(best_rf_model, name='model2_wo_surgemulti')
+    # ubm.pickle_model(best_model, name='model2_wo_surgemulti')
+    #
+    # ubm.make_forecast(best_model, name='model2_wo_surgemulti')
 
     ### Cross val score with baseline RF
     # rf = RandomForestRegressor(n_estimators=10)
@@ -277,7 +276,7 @@ if __name__ == '__main__':
     # ubm.format_guess()
     # print ubm.estimator.predict(ubm.X_g)
 
-    ubm.print_feature_importance(X_train, best_rf_model)
+    # ubm.print_feature_importance(X_train, best_rf_model)
 
     """
     best parameters: {'max_features': None, 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 10}
@@ -382,7 +381,7 @@ if __name__ == '__main__':
 
     """
     With surge multiplier, week 14 predictions:
-    
+
     ('display_name_uberSUV', 0.28156529820578796)
     ('trip_distance', 0.17386787481727198)
     ('display_name_uberBLACK', 0.15105326480490774)

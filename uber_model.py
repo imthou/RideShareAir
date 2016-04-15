@@ -4,12 +4,16 @@ import seaborn as sns
 import numpy as np
 import cPickle as pickle
 from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.grid_search import GridSearchCV
 from sklearn.cross_validation import cross_val_score
 from sklearn.metrics import mean_squared_error
 from matplotlib.dates import MonthLocator, WeekdayLocator, DateFormatter, HourLocator
-from sklearn.linear_model import RidgeCV, LassoCV, ElasticNetCV
+from sklearn.linear_model import RidgeCV, LassoCV, ElasticNetCV, Ridge, Lasso, ElasticNet
+import rpy2.robjects as robjects
+import rpy2.robjects.packages as rpackages
+rforecast = rpackages.importr('forecast')
 
 class UberModel(object):
     """
@@ -42,7 +46,7 @@ class UberModel(object):
 
         # df['lag_1'] = df['avg_price_est'].diff(periods=1)
 
-        features = ['avg_price_est','city','display_name','trip_duration', 'trip_distance','pickup_estimate','hour','dayofweek','weekofyear'] #,'lag_1','surge_multiplier'
+        features = ['avg_price_est','city','display_name','trip_duration', 'trip_distance','pickup_estimate','surge_multiplier','hour','dayofweek','weekofyear'] #,'lag_1'
         hourly = pd.get_dummies(hourly[features], columns=['city','display_name','hour','dayofweek']).drop(['city_chicago','display_name_uberASSIST','hour_0','dayofweek_0'], axis=1)
         self.df = hourly.dropna()
         self.kfold_indices = []
@@ -111,38 +115,25 @@ class UberModel(object):
         X_g = X_g.mean().values.reshape(1,-1)
         self.X_g = X_g
 
-    def make_forecast(self, model, name):
-        """
-        Output: DataFrame
-
-        Train on the holdout set and make predictions for the next week
-        """
-        X_hold = self.hold_set[self.hold_set.columns[1:]]
-        y_hold = self.hold_set['avg_price_est']
-        model.fit(X_hold, y_hold)
-        self.X_forecast = X_hold.copy()
-        # assumes weekofyear is increasing
-        self.X_forecast['weekofyear'] = self.X_forecast['weekofyear'].apply(lambda x: x+1)
-        self.X_forecast.index = self.X_forecast.index + pd.Timedelta(days=7)
-        self.y_forecast = model.predict(self.X_forecast)
-        self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
-        self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
-        saved_filename = "rideshare_app/data/{}_forecast.csv".format(name)
-        self.y_forecast.to_csv(saved_filename)
-        print "saved prediction values to {}".format(saved_filename)
-
     def perform_grid_search(self, X_train, X_test, y_train, y_test, estimator, custom_cv, params):
         """
         Output: Best model
 
         Perform grid search on all parameters of models to find the model that performs the best through cross-validation
         """
-        gridsearch = GridSearchCV(estimator,
-                                     params,
-                                     n_jobs=-1,
-                                     verbose=True,
-                                     scoring='mean_squared_error',
-                                     cv=custom_cv)
+        if estimator.__class__.__name__ != "XGBRegressor":
+            gridsearch = GridSearchCV(estimator,
+                                         params,
+                                         n_jobs=-1,
+                                         verbose=True,
+                                         scoring='mean_squared_error',
+                                         cv=custom_cv)
+        else:
+            gridsearch = GridSearchCV(estimator,
+                                         params,
+                                         n_jobs=-1,
+                                         verbose=True,
+                                         cv=custom_cv)
 
         gridsearch.fit(X_train, y_train)
 
@@ -157,12 +148,140 @@ class UberModel(object):
         base_est = estimator
 
         idx = custom_cv[-1][1]
-        rf.fit(X_train.iloc[idx], y_train[idx])
+        base_est.fit(X_train.iloc[idx], y_train[idx])
         base_y_pred = base_est.predict(X_test)
 
         print "MSE with default param:", mean_squared_error(y_true=y_test, y_pred=base_y_pred)
 
         return gridsearch, best_model, y_pred
+
+    def forecast_with_arima(self, X_hold, y_hold):
+        """
+        Forecast next week's prices with ARIMA
+        """
+        train_set = pd.concat([X_hold,y_hold], axis=1)
+        self.X_forecast = self.hold_set[self.hold_set.columns[1:]].copy()
+        # assumes weekofyear is increasing
+        self.X_forecast['weekofyear'] = self.X_forecast['weekofyear'].apply(lambda x: x+1)
+        self.X_forecast.index = self.X_forecast.index + pd.Timedelta(days=7)
+        test_set = self.X_forecast.reset_index()
+        train_name = "data/uber_train_forecast.csv"
+        train_set.to_csv(train_name)
+        test_name = "data/uber_test_forecast.csv"
+        test_set.to_csv(test_name)
+        rfeatures = ['trip_duration', 'trip_distance', 'pickup_estimate', 'surge_multiplier','city_denver', 'city_ny', 'city_seattle','city_sf','display_name_uberBLACK','display_name_uberSELECT','display_name_uberSUV','display_name_uberTAXI','display_name_uberX','display_name_uberXL','weekofyear']
+        feats = 'c({})'.format(str(rfeatures)[1:-1])
+        r = robjects.r("""
+        train_set = read.csv("{}")
+        test_set = read.csv("{}")
+        y = train_set['avg_price_est']
+        features = {}
+        X = train_set[features]
+        X_test = test_set[features]
+        fit = auto.arima(y, xreg=X)
+        y_pred = forecast(fit, xreg=X_test)
+        """.format(train_name, test_name, feats))
+        print robjects.r("""y_pred['model']""")
+        r_lower = robjects.r("""y_pred['lower']""")[0]
+        r_upper = robjects.r("""y_pred['upper']""")[0]
+        r_pred = robjects.r("""y_pred['mean']""")[0]
+        y_pred = [r_pred[i] for i in range(len(r_pred))]
+        self.y_forecast = y_pred
+        self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
+        self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
+        name = "arima"
+        saved_filename = "rideshare_app/data/{}_forecast.csv".format(name)
+        self.y_forecast.to_csv(saved_filename)
+        print "saved prediction values to {}".format(saved_filename)
+
+    def run_arima_cv(self, X_train, y_train, custom_cv):
+        """
+        Cross validate each fold with auto.arima
+        """
+        train_set = pd.concat([X_train,y_train], axis=1)
+        rfeatures = ['trip_duration', 'trip_distance', 'pickup_estimate', 'surge_multiplier','city_denver', 'city_ny', 'city_seattle','city_sf','display_name_uberBLACK','display_name_uberSELECT','display_name_uberSUV','display_name_uberTAXI','display_name_uberX','display_name_uberXL']
+        for i, (train_index, test_index) in enumerate(custom_cv):
+            train_fold = train_set.iloc[train_index]
+            train_name = "data/uber_train{}.csv".format(i)
+            train_fold.to_csv(train_name)
+            test_fold = train_set.iloc[test_index]
+            test_name = "data/uber_test{}.csv".format(i)
+            test_fold.to_csv(test_name)
+            y_pred = self.run_auto_arima(train_name, test_name, features=rfeatures)
+            y_true = test_fold['avg_price_est'].values
+            print "ARIMA KFold{}, MSE: {}".format(i, mean_squared_error(y_true, y_pred))
+
+    def run_auto_arima(self, train_name, test_name, features):
+        """
+        Output: Ndarray
+
+        Returns predictions from auto.arima model
+        """
+        feats = 'c({})'.format(str(features)[1:-1])
+        r = robjects.r("""
+        train_set = read.csv("{}")
+        test_set = read.csv("{}")
+        y = train_set['avg_price_est']
+        features = {}
+        X = train_set[features]
+        X_test = test_set[features]
+        fit = auto.arima(y, xreg=X)
+        y_pred = forecast(fit, xreg=X_test)
+        """.format(train_name, test_name, feats))
+        print robjects.r("""y_pred['model']""")
+        r_lower = robjects.r("""y_pred['lower']""")[0]
+        r_upper = robjects.r("""y_pred['upper']""")[0]
+        r_pred = robjects.r("""y_pred['mean']""")[0]
+        y_pred = [r_pred[i] for i in range(len(r_pred))]
+
+        return y_pred
+
+        """
+        ARIMA(3,0,5) with non-zero mean
+        AIC=36988.42   AICc=36988.67   BIC=37143.83
+        ARIMA KFold0, MSE: 209.41649901
+
+        ARIMA(4,1,1)
+        AIC=39062.83   AICc=39063   BIC=39193.25
+        ARIMA KFold1, MSE: 220.637841507
+
+        ARIMA(4,0,4) with non-zero mean
+        AIC=37771.33   AICc=37771.57   BIC=37927.76
+        ARIMA KFold2, MSE: 241.211876874
+
+        ARIMA(4,0,5) with non-zero mean
+        AIC=37817.13   AICc=37817.39   BIC=37980.18
+        ARIMA KFold3, MSE: 298.040536076
+
+        ARIMA(4,1,3)
+        AIC=41116.46   AICc=41116.66   BIC=41260.03
+        ARIMA KFold4, MSE: 272.382357559
+
+        ARIMA(3,0,5) with non-zero mean
+        AIC=40992.61   AICc=40992.85   BIC=41149.19
+        ARIMA KFold5, MSE: 198.33950856
+        """
+
+    def run_linear_models(self, estimator, X_train, y_train, X_hold, y_hold):
+        """
+        Output: Best Model
+
+        Returns MSE scores for each of the linear models
+        """
+        estimator.fit(X_train, y_train)
+        est_name = estimator.__class__.__name__
+        if est_name != 'ElasticNetCV':
+            print "best param for {}: {}".format(est_name, estimator.alpha_)
+        else:
+            print "best param for {}: {}, {}".format(est_name, estimator.alpha_, estimator.l1_ratio_)
+        y_pred = estimator.predict(X_hold)
+        print "{} MSE: {}".format(est_name, mean_squared_error(y_hold, y_pred))
+        self.pickle_model(estimator, name=est_name.lower() + "_uber")
+
+        if est_name != 'ElasticNetCV':
+            self.make_forecast(estimator, name=est_name.lower() + "_uber", alpha=estimator.alpha_)
+        else:
+            self.make_forecast(estimator, name=est_name.lower() + "_uber", alpha=estimator.alpha_, l1_ratio=estimator.l1_ratio_)
 
     def print_feature_importance(self, X_train, best_rf_model):
         """
@@ -180,6 +299,32 @@ class UberModel(object):
         with open("rideshare_app/data/{}.pkl".format(name), 'w') as f:
             pickle.dump(model, f)
         print "{} is pickled.".format(name)
+
+    def make_forecast(self, model, name, alpha=None, l1_ratio=None):
+        """
+        Output: DataFrame
+
+        Train on the holdout set and make predictions for the next week
+        """
+        X_hold = self.hold_set[self.hold_set.columns[1:]]
+        y_hold = self.hold_set['avg_price_est']
+        if name.split("_")[0] == "ridgecv":
+            model = Ridge(alpha=alpha)
+        elif name.split("_")[0] == "lassocv":
+            model = Lasso(alpha=alpha)
+        elif name.split("_")[0] == "elasticnetcv":
+            model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio)
+        model.fit(X_hold, y_hold)
+        self.X_forecast = X_hold.copy()
+        # assumes weekofyear is increasing
+        self.X_forecast['weekofyear'] = self.X_forecast['weekofyear'].apply(lambda x: x+1)
+        self.X_forecast.index = self.X_forecast.index + pd.Timedelta(days=7)
+        self.y_forecast = model.predict(self.X_forecast)
+        self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
+        self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
+        saved_filename = "rideshare_app/data/{}_forecast.csv".format(name)
+        self.y_forecast.to_csv(saved_filename)
+        print "saved prediction values to {}".format(saved_filename)
 
 def plot_prediction_true_res(y_pred):
     """
@@ -250,23 +395,43 @@ if __name__ == '__main__':
     y_hold.pop('record_time')
 
     ### GridSearchCV for best parameters for RF
-    params = {'n_estimators': [10, 100, 200],
-                            'criterion': ['mse'],
-                            'min_samples_split': [2, 4, 6, 7],
-                            'min_samples_leaf': [1, 2],
-                            'max_features': ['sqrt',None,'log2']}
-    gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), RandomForestRegressor(), custom_cv, params)
+    # rb_params = {'n_estimators': [10, 100, 200],
+    #                         'criterion': ['mse'],
+    #                         'min_samples_split': [2, 4, 6, 7],
+    #                         'min_samples_leaf': [1, 2],
+    #                         'max_features': ['sqrt',None,'log2']}
+    xgb_params = {'max_depth': [2,4,6],
+                            'n_estimators': [50,100,200]}
+    gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), XGBRegressor(), custom_cv, xgb_params)
 
-    # plot_prediction_true_res(y_pred)
+    ## Multiple Regression with CV
+    # for regression in [RidgeCV(scoring='mean_squared_error', cv=custom_cv), LassoCV(cv=custom_cv, n_jobs=-1), ElasticNetCV(cv=custom_cv, n_jobs=-1)]:
+    #     ubm.run_linear_models(regression, X_train, y_train.values.reshape(-1), X_hold, y_hold.values.reshape(-1))
 
-    # ubm.pickle_model(best_model, name='model2_wo_surgemulti')
-    #
-    # ubm.make_forecast(best_model, name='model2_wo_surgemulti')
+    """
+    best param for RidgeCV: 1.0
+    RidgeCV MSE: 118.210473172
+    best param for LassoCV: 12.8826178205
+    LassoCV MSE: 765.869490846
+    best param for ElasticNetCV: 25.765235641, 0.5
+    ElasticNetCV MSE: 773.68142656
+    """
 
-    ### Cross val score with baseline RF
+    ## ARIMA in R with CV
+    # ubm.run_arima_cv(X_train, y_train, custom_cv)
+    # ubm.forecast_with_arima(X_hold, y_hold)
+
+    plot_prediction_true_res(y_pred)
+
+    ubm.pickle_model(best_model, name='xgboost_model')
+
+    ubm.make_forecast(best_model, name='xgboost_model')
+
+    ### Cross val score with baseline RF and XGB
     # rf = RandomForestRegressor(n_estimators=10)
-    # mses = -cross_val_score(estimator=rf, X=X_train, y=y_train.values.reshape(-1), cv=custom_cv, scoring='mean_squared_error', n_jobs=-1)
-    # print "CV on baseline RF with MSE:", zip(X_train['weekofyear'].unique(),mses)
+    # xgb = XGBRegressor(n_estimators=100)
+    # mses = -cross_val_score(estimator=xgb, X=X_train, y=y_train.values.reshape(-1), cv=custom_cv, scoring='mean_squared_error', n_jobs=-1)
+    # print "CV on baseline XGB with MSE:", zip(X_train['weekofyear'].unique(),mses)
 
 
     # be able to ask your model to predict what the price will be based on the city and hour time of travel and type of transport

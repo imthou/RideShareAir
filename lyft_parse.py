@@ -44,8 +44,11 @@ class LyftParse(object):
             df.drop('display_name', axis=1, inplace=True)
             dfs.append(df)
             if i % 50 == 0:
-                print "progress: {}, {:.2f}%".format(i, float(i)/len(data) * 100.0)
+                print "progress: {}, {:.2f}%".format(i, float(i)/len(self.data) * 100.0)
         self.df = pd.concat(dfs)
+        self.df['avg_est_price'] = (self.df['estimated_cost_cents_max'] + self.df['estimated_cost_cents_min']) / 200.
+        self.df = self.df[['record_time','city','ride_type','avg_est_price','estimated_cost_cents_min','estimated_cost_cents_max','estimated_distance_miles','estimated_duration_seconds', 'eta_seconds','base_charge','cost_minimum','cost_per_mile','cost_per_minute','cancel_penalty_amount','drivers','num_drivers','primetime_percentage','seats','trust_and_service','currency','start_address','stop_address','start_latitude','start_longitude','stop_latitude','stop_longitude', 'image_url']]
+
 
     def save_data_csv(self):
         """
@@ -54,7 +57,7 @@ class LyftParse(object):
         Saves Dataframe to CSV file
         """
         filename = "data/lyft_data.csv"
-        self.df.to_csv(filename)
+        self.df.to_csv(filename, index=False)
         print "saved file to {}".format(filename)
 
 if __name__ == '__main__':

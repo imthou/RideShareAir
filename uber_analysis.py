@@ -16,7 +16,7 @@ class UberAnalysis(object):
         """
         Output: Cleans the dataframes and restructures the dataframe for analysis
         """
-        df = pd.read_csv(filename)
+        df = pd.read_csv(filename, error_bad_lines=False)
         df.rename(columns = {'estimate_y':'price_estimate', 'estimate_x':'pickup_estimate', 'duration':'trip_duration', 'distance':'trip_distance', 'price_details.base':'base_price', 'price_details.minimum':'base_minimum_price', 'price_details.cost_per_minute':'cost_per_minute', 'price_details.cost_per_distance':'cost_per_distance', 'price_details.distance_unit':'distance_unit', 'price_details.cancellation_fee':'cancellation_fee', 'price_details.currency_code':'currency_code', 'price_details.service_fees':'service_fees', 'minimum':'surge_minimum_price'}, inplace=True)
         df['record_time'] = pd.to_datetime(df['record_time'], unit='s')
         df['avg_price_est'] = (df['low_estimate'] + df['high_estimate']) / 2.
@@ -26,6 +26,7 @@ class UberAnalysis(object):
         'low_estimate','avg_price_est','high_estimate','trip_duration','trip_distance','surge_multiplier','surge_minimum_price','pickup_estimate','capacity','base_price','base_minimum_price','cost_per_minute','cost_per_distance','distance_unit','cancellation_fee','currency_code','service_fees','service_fees_type','image','description','start_latitude','start_longitude','stop_latitude','stop_longitude','start_address','stop_address','product_id']]
         df = self.merge_display_names(df)
         df.to_csv('data/organized_uber_{}.csv'.format(filename.split('.')[0].split('_')[-1]), index=False)
+        print "organized uber data to {}".format(filename.split('.')[0].split('_')[-1])
         return df
 
     def merge_display_names(self, df):

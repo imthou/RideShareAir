@@ -1,0 +1,9 @@
+{% extends "cover.html" %}
+{% block body %}
+
+  <h1>Forecast of {{ city }} {{ cartype }}</h1>
+  <div align="center" class="resultstable">
+  {{ results | safe }}
+  </div>
+
+{% endblock %}

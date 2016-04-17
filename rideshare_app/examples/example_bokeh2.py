@@ -1,11 +1,14 @@
-# myapp.py
+# example_bokeh2.py
 
 import numpy as np
 import pandas as pd
 
-from bokeh.models import Button
-from bokeh.plotting import figure, curdoc, vplot
-from bokeh.client import push_session
+from bokeh.plotting import figure, vplot, output_server, show, push, cursession
+from json import load
+from urllib2 import urlopen
+from bokeh.embed import autoload_server
+
+output_server("example")
 
 model1_file = 'data/model1_w_surgemulti_forecast.csv'
 model2_file = 'data/model2_wo_surgemulti_forecast.csv'
@@ -42,13 +45,6 @@ def callback():
         ds.trigger('data', ds.data, ds.data)
     i = i + 1
 
-# add a button widget and configure with the call back
-# button = Button(label="Press Me")
-# button.on_click(callback)
-
-# put the button and plot in a layout and add to the document
-# curdoc().add_root(vplot(button, p))
-
 if __name__ == '__main__':
     # create a plot and style its properties
     model1 = get_forecast_data(model1_file)
@@ -62,10 +58,18 @@ if __name__ == '__main__':
             p, ds = create_plots(model1, model2, city, cartype)
             plots.append(p)
             new_pts.append(ds)
-    ps = vplot(plots[0])
+    vp = vplot(*plots)
+    ip = load(urlopen('http://jsonip.com'))['ip']
+    session = cursession()
+    session.publish()
+    tag = autoload_server(vp, session, public=True)
 
+    html = """
+    {%% extends "base.html" %%}
+    {%% block bokeh %%}
+    %s
+    {%% endblock %%}
+    """ % tag
 
-    session = push_session(curdoc())
-    curdoc().add_periodic_callback(callback, 1000)
-    session.show() # open the document in a browser
-    session.loop_until_closed() # run forever
+    with open('templates/index.html', 'w+') as f:
+        f.write(html)

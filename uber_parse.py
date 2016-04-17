@@ -24,6 +24,7 @@ class UberParse(object):
         self.df = pd.concat(self.dfs)
         self.df.drop(['price_details'],axis=1,inplace=True)
         self.df.to_csv('data/uber_data_{}.csv'.format(self.filename.split('_')[1].split('.')[0]), index=False, encoding='utf-8')
+        print "finished parsing uber data to {}".format(self.filename.split('_')[1].split('.')[0])
 
     def parse_json(self):
         """

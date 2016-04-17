@@ -1,0 +1,41 @@
+{% extends "cover.html" %}
+{% block body %}
+
+<form action="{{ url_for('forecast') }}" method="POST">
+  <h1>Where are you traveling?</h1>
+  <br>
+  <select name='city' class="btn btn-lg btn-default" >
+      <option value='denver'>Denver</option>
+      <option value='sf'>San Francisco</option>
+      <option value='ny'>New York</option>
+      <option value='seattle'>Seattle</option>
+      <option value='chicago'>Chicago</option>
+  </select>
+  <br>
+  <h1>What type of car do you want to take?</h1>
+  <br>
+  <select name='cartype' class="btn btn-lg btn-default">
+      <option value='uberX'>uberX</option>
+      <option value='uberXL'>uberXL</option>
+      <option value='uberBLACK'>uberBLACK</option>
+      <option value='uberSUV'>uberSUV</option>
+  </select>
+  <br>
+  <h1>What day are you taking a ride?</h1>
+  <br>
+  <select name='dayofweek' class="btn btn-lg btn-default">
+      <option value='monday'>Monday</option>
+      <option value='tuesday'>Tuesday</option>
+      <option value='wednesday'>Wednesday</option>
+      <option value='thursday'>Thursday</option>
+      <option value='friday'>Friday</option>
+      <option value='saturday'>Saturday</option>
+      <option value='sunday'>Sunday</option>
+  </select>
+<br>
+<br>
+<br>
+<input type='submit' value='Submit' class="btn btn-lg btn-default">
+ </form>
+
+{% endblock %}

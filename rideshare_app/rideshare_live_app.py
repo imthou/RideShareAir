@@ -48,7 +48,16 @@ def forecast():
         results.rename(columns={"y_forecast":"price"}, inplace=True)
         results.set_index("date", inplace=True)
         results['price'] = results['price'].round(2)
-        return render_template("results.html", results=results.to_html(), cartype=cartype, city=city.capitalize())
+        min_price = results['price'].min()
+        max_price = results['price'].max()
+        results_color = results.copy()
+        results_color.reset_index(inplace=True)
+        results_color.rename(columns=lambda x: x.capitalize(), inplace=True)
+        style_results = results_color.style.highlight_max(axis=0, subset=['Price'], color='red').highlight_min(axis=0, subset=['Price'], color='green')
+        # style_results.data.set_index("date", inplace=True)
+        results_html = style_results.render()
+        change_city = {'denver':'Denver','ny':'New York','chicago':'Chicago','seattle':'Seattle','sf':'San Francisco'}
+        return render_template("results.html", results=results_html, cartype=cartype, city=change_city[city], min_price=min_price, max_price=max_price)
     return render_template("forecast.html")
 
 @app.route("/model")

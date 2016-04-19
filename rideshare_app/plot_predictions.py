@@ -25,7 +25,7 @@ collection = db['uberapi']
 model1_file = 'data/model1_w_surgemulti_forecast.csv'
 # model2_file = 'data/model2_wo_surgemulti_forecast.csv'
 model3_file = 'data/ridgecv_uber_forecast.csv'
-# model4_file = 'data/arima_forecast.csv'
+model4_file = 'data/arima_forecast.csv'
 model5_file = 'data/xgboost_model_forecast.csv'
 
 def get_forecast_data(forecast_file):
@@ -45,8 +45,8 @@ def mongo_query():
 
     Queries Mongo Database on EC2
     """
-    start_date = (pd.to_datetime('2016-04-11') + pd.Timedelta(hours=7)).value // 10**9
-    end_date = (pd.to_datetime('2016-04-17') + pd.Timedelta(hours=7)).value // 10**9
+    start_date = (pd.to_datetime('2016-04-18') + pd.Timedelta(hours=7)).value // 10**9
+    end_date = (pd.to_datetime('2016-04-24') + pd.Timedelta(hours=7)).value // 10**9
     docs = collection.find({'record_time':{'$gte':start_date,
                                     '$lte':end_date}},
                             {'record_time': 1, 'city':1, 'prices':1, '_id':0})
@@ -74,10 +74,13 @@ def mongo_query():
     hourly = df.groupby(['date','hour','city','display_name']).mean().reset_index()
     hourly['record_time'] = pd.to_datetime(hourly['date'].astype(str) + ' ' + hourly['hour'].astype(str) + ":00:00")
     hourly['name'] = 'true values'
+    forecast_name = "data/live_forecast_data.csv"
+    hourly.to_csv(forecast_name,index=False)
+    print "exported live data to {}".format(forecast_name)
     return hourly
 
 # def create_plots(model1, model2, model3, model4, model5, live_data, city, display_name):
-def create_plots(model1, model3, model5, live_data, city, display_name):
+def create_plots(model1, model3, model4, model5, live_data, city, display_name):
     """
     Output: Bokeh plot
 
@@ -87,13 +90,13 @@ def create_plots(model1, model3, model5, live_data, city, display_name):
         model1 = model1.query("city_{} == 1 and display_name_{} == 1".format(city, display_name))
         # model2 = model2.query("city_{} == 1 and display_name_{} == 1".format(city, display_name))
         model3 = model3.query("city_{} == 1 and display_name_{} == 1".format(city, display_name))
-        # model4 = model4.query("city_{} == 1 and display_name_{} == 1".format(city, display_name))
+        model4 = model4.query("city_{} == 1 and display_name_{} == 1".format(city, display_name))
         model5 = model5.query("city_{} == 1 and display_name_{} == 1".format(city, display_name))
     else:
         model1 = model1.query("city_denver == 0 and city_seattle == 0 and city_sf == 0 and city_ny == 0 and display_name_{} == 1".format(display_name))
         # model2 = model2.query("city_denver == 0 and city_seattle == 0 and city_sf == 0 and city_ny == 0 and display_name_{} == 1".format(display_name))
         model3 = model3.query("city_denver == 0 and city_seattle == 0 and city_sf == 0 and city_ny == 0 and display_name_{} == 1".format(display_name))
-        # model4 = model4.query("city_denver == 0 and city_seattle == 0 and city_sf == 0 and city_ny == 0 and display_name_{} == 1".format(display_name))
+        model4 = model4.query("city_denver == 0 and city_seattle == 0 and city_sf == 0 and city_ny == 0 and display_name_{} == 1".format(display_name))
         model5 = model5.query("city_denver == 0 and city_seattle == 0 and city_sf == 0 and city_ny == 0 and display_name_{} == 1".format(display_name))
     cartype = display_name.lower()
     live_data = live_data.query("display_name == @cartype and city == @city")
@@ -125,14 +128,14 @@ def create_plots(model1, model3, model5, live_data, city, display_name):
         )
     )
 
-    # source4 = ColumnDataSource(
-    #     data=dict(
-    #         d=model4['date'].astype(str),
-    #         h=model4['hour'],
-    #         f=model4['y_forecast'],
-    #         n=model4['name']
-    #     )
-    # )
+    source4 = ColumnDataSource(
+        data=dict(
+            d=model4['date'].astype(str),
+            h=model4['hour'],
+            f=model4['y_forecast'],
+            n=model4['name']
+        )
+    )
 
     source5 = ColumnDataSource(
         data=dict(
@@ -160,24 +163,25 @@ def create_plots(model1, model3, model5, live_data, city, display_name):
             ("Average Price", "@f")
         ]
     )
-
-    p = figure(title="Forecast of {} {} Prices - 4/11/16 to 4/17/16".format(city, display_name),
-                    plot_width=700, plot_height=300, x_axis_type="datetime",
-                    tools=[hover, PanTool(), BoxZoomTool(), ResizeTool(), WheelZoomTool(), PreviewSaveTool(), ResetTool()], toolbar_location="left", title_text_font_size="10pt")
+    change_city = {'denver':'Denver','ny':'New York','chicago':'Chicago','seattle':'Seattle','sf':'San Francisco'}
+    p = figure(title="Forecast of {} {} Prices - 4/18/16 to 4/24/16".format(change_city[city], display_name),
+                    plot_width=1000, plot_height=500, x_axis_type="datetime",
+                    tools=[hover, PanTool(), BoxZoomTool(), ResizeTool(), WheelZoomTool(), PreviewSaveTool(), ResetTool()], toolbar_location="left", title_text_font_size="25pt")
 
     p.line(model1['record_time'], model1['y_forecast'], line_color='blue', line_width=2, legend="Random Forest Regressor", alpha=0.5, source=source1)
     # p.line(model2['record_time'], model2['y_forecast'], line_color='green', line_width=2, legend="RF Model 2 - Without Surge Multiplier", alpha=0.5, source=source2) # line_dash=[4,4]
-    p.line(model3['record_time'], model3['y_forecast'], line_color='gray', line_width=2, legend="Ridge Regression", alpha=0.5, source=source3) # line_dash=[4,4]
-    # p.line(model4['record_time'], model4['y_forecast'], line_color='gray', line_width=2, legend="ARIMA Model", alpha=0.5, source=source4) # line_dash=[4,4]
+    p.line(model3['record_time'], model3['y_forecast'], line_color='magenta', line_width=2, legend="Ridge Regression", alpha=0.5, source=source3) # line_dash=[4,4]
+    p.line(model4['record_time'], model4['y_forecast'], line_color='gray', line_width=2, legend="ARIMA Model", alpha=0.5, source=source4) # line_dash=[4,4]
     p.line(model5['record_time'], model5['y_forecast'], line_color='green', line_width=2, legend="XGB Regressor", alpha=0.5, source=source5) # line_dash=[4,4]
-    p.xaxis.axis_label = 'Time'
-    p.xaxis.axis_label_text_font_size = "10pt"
+    # p.xaxis.axis_label = 'Time'
+    # p.xaxis.axis_label_text_font_size = "10pt"
     p.yaxis.axis_label = 'Average Price Estimate'
-    p.yaxis.axis_label_text_font_size = "10pt"
+    p.yaxis.axis_label_text_font_size = "20pt"
+    p.yaxis.axis_label_standoff = 15
     p.xgrid[0].ticker.desired_num_ticks = 20
     xformatter = DatetimeTickFormatter(formats=dict(hours=["%H"]))
     p.xaxis.formatter = xformatter
-    p.legend.label_text_font_size = "8pt"
+    p.legend.label_text_font_size = "10pt"
 
     # add a text renderer to out plot (no data yet)
     r = p.circle(x=live_data['record_time'], y=live_data['avg_price_est'], legend="True Average Prices", source=source6, color='red')
@@ -191,7 +195,7 @@ def build_plots():
     model1 = get_forecast_data(model1_file)
     # model2 = get_forecast_data(model2_file)
     model3 = get_forecast_data(model3_file)
-    # model4 = get_forecast_data(model4_file)
+    model4 = get_forecast_data(model4_file)
     model5 = get_forecast_data(model5_file)
     live_data = mongo_query()
     print live_data.tail()
@@ -202,7 +206,7 @@ def build_plots():
     for city in ['denver','ny','chicago','seattle','sf']:
         for cartype in ['uberX','uberXL','uberBLACK','uberSUV']:
             # p, ds = create_plots(model1, model2, model3, model4, model5, live_data, city, cartype)
-            p, ds = create_plots(model1, model3, model5, live_data, city, cartype)
+            p, ds = create_plots(model1, model3, model4, model5, live_data, city, cartype)
             tab = Panel(child=p, title=cartype)
             plots.append(tab)
             new_pts.append((city, cartype, ds))

@@ -58,11 +58,14 @@ class UberModel(object):
         Train test split by specified leaveout value
         """
         if weekly:
-            self.total_folds = self.df['weekofyear'].unique()
+            # modified to exclude the current week prices
+            self.total_folds = self.df['weekofyear'].unique()[:-1]
+            print "total weeks:", self.total_folds
             # leaves out the latest week based on the order of the array which might be a problem when it predicts the next year
             lo = self.total_folds[-leaveout:][0]
             train_set = self.df.query("weekofyear < @lo")
-            hold_set = self.df.query("weekofyear >= @lo")
+            hold_set = self.df.query("weekofyear >= @lo and weekofyear <= @self.total_folds[-1]")
+            print "holdout week:",hold_set['weekofyear'].unique()
             self.train_set = train_set.copy()
             self.hold_set = hold_set.copy()
             # print self.train_set.weekofyear.unique()
@@ -380,7 +383,7 @@ def plot_prediction_true_res(y_pred):
             plt.close('all')
 
 if __name__ == '__main__':
-    filename = 'data/organized_uber_41116.csv'
+    filename = 'data/organized_uber_41816.csv'
     ubm = UberModel(filename)
 
     # Subsetting by week -> array([ 7,  8,  9, 10, 11, 12, 13], dtype=int32)
@@ -395,37 +398,31 @@ if __name__ == '__main__':
     y_hold.pop('record_time')
 
     ### GridSearchCV for best parameters for RF
-    # rb_params = {'n_estimators': [10, 100, 200],
+    # rf_params = {'n_estimators': [10, 100, 200],
     #                         'criterion': ['mse'],
     #                         'min_samples_split': [2, 4, 6, 7],
     #                         'min_samples_leaf': [1, 2],
     #                         'max_features': ['sqrt',None,'log2']}
-    xgb_params = {'max_depth': [2,4,6],
-                            'n_estimators': [50,100,200]}
-    gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), XGBRegressor(), custom_cv, xgb_params)
+    # gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), RandomForestRegressor(), custom_cv, rf_params)
+
+    # xgb_params = {'max_depth': [2,4,6],
+    #                         'n_estimators': [50,100,200],
+    #                         'gamma': [0,1,2]}
+    # gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), XGBRegressor(), custom_cv, xgb_params)
 
     ## Multiple Regression with CV
     # for regression in [RidgeCV(scoring='mean_squared_error', cv=custom_cv), LassoCV(cv=custom_cv, n_jobs=-1), ElasticNetCV(cv=custom_cv, n_jobs=-1)]:
     #     ubm.run_linear_models(regression, X_train, y_train.values.reshape(-1), X_hold, y_hold.values.reshape(-1))
 
-    """
-    best param for RidgeCV: 1.0
-    RidgeCV MSE: 118.210473172
-    best param for LassoCV: 12.8826178205
-    LassoCV MSE: 765.869490846
-    best param for ElasticNetCV: 25.765235641, 0.5
-    ElasticNetCV MSE: 773.68142656
-    """
-
     ## ARIMA in R with CV
-    # ubm.run_arima_cv(X_train, y_train, custom_cv)
-    # ubm.forecast_with_arima(X_hold, y_hold)
-
-    plot_prediction_true_res(y_pred)
-
-    ubm.pickle_model(best_model, name='xgboost_model')
-
-    ubm.make_forecast(best_model, name='xgboost_model')
+    ubm.run_arima_cv(X_train, y_train, custom_cv)
+    ubm.forecast_with_arima(X_hold, y_hold)
+    #
+    # plot_prediction_true_res(y_pred)
+    #
+    # ubm.pickle_model(best_model, name='xgboost_model')
+    #
+    # ubm.make_forecast(best_model, name='xgboost_model')
 
     ### Cross val score with baseline RF and XGB
     # rf = RandomForestRegressor(n_estimators=10)
@@ -444,157 +441,32 @@ if __name__ == '__main__':
     # ubm.print_feature_importance(X_train, best_rf_model)
 
     """
-    best parameters: {'max_features': None, 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 10}
-    RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
-       max_features=None, max_leaf_nodes=None, min_samples_leaf=1,
-       min_samples_split=6, min_weight_fraction_leaf=0.0,
-       n_estimators=10, n_jobs=1, oob_score=False, random_state=None,
-       verbose=0, warm_start=False)
-    MSE with best rf: 0.0696791534095
-    MSE with default param rf: 0.224983742868
-
-    Without leakage variables:
-
-    best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 10.9785314346
-    MSE with default param rf: 15.322677252
-
-    Without lag_1 variable:
-
-    best parameters: {'max_features': 'log2', 'min_samples_split': 6, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 10}
-    MSE with best rf: 46.900728035
-    MSE with default param rf: 44.0100363882
-
-    With cv lag of 5:
-
-    best parameters: {'max_features': 'log2', 'min_samples_split': 7, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 46.158427494
-    MSE with default param rf: 56.2259376978
-
-    -- try to resample by hour but still include all the categorical variables
-
-    With hourly resampling and cv lag of 2:
-
-    best parameters: {'max_features': 'sqrt', 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 39.3497185302
-    MSE with default param rf: 94.9461884732
-
-    With hourly resampling and cv lag of 1:
-
-    best parameters: {'max_features': 'sqrt', 'min_samples_split': 6, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 200}
-    MSE with best rf: 36.5273036401
-    MSE with default param rf: 60.2200781633
-
-    -- go back and see what other features can you include that is mostly constant through the week
-
-    Modified holdout set to include week 12 and 13:
-
-    best parameters: {'max_features': None, 'min_samples_split': 7, 'min_samples_leaf': 2, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 280.266058956
-    MSE with default param rf: 304.215061729
-
-    With surge_multiplier:
-
-    best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 15.51976143
-    MSE with default param rf: 32.4664843472
-
-    ('display_name_uberSUV', 0.29000892463099914)
-    ('trip_distance', 0.17669217696686926)
-    ('display_name_uberBLACK', 0.1549772144537914)
-    ('trip_duration', 0.12605338196387572)
-    ('surge_multiplier', 0.071224937402909513)
-    ('display_name_uberWAV', 0.064931857129935586)
-    ('display_name_uberX', 0.026107336328640759)
-    ('display_name_uberXL', 0.020264040684914435)
-    ('display_name_uberSELECT', 0.017277217298207182)
-    ('city_ny', 0.017257763698162489)
-    ('display_name_uberESPANOL', 0.014434691681362639)
-    ('city_seattle', 0.0094182122349883279)
-    ('pickup_estimate', 0.0040876569743090261)
-
     Retrieved data up to week 14:
 
     best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
     MSE with best rf: 0.942149836266
     MSE with default param rf: 10.9731377293
 
-    Without surge_multiplier:
+    Retrieved data up to week 15:
 
-    best parameters: {'max_features': 'sqrt', 'min_samples_split': 4, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 56.7717152006
-    MSE with default param rf: 64.234876547
+    MSE with best RandomForestRegressor: 1.96134408573
+    MSE with default param: 15.3924882909
 
-    ('display_name_uberSUV', 0.2048637442374508)
-    ('trip_duration', 0.13164410221511086)
-    ('pickup_estimate', 0.10503238907363363)
-    ('display_name_uberWAV', 0.10330720494351724)
-    ('trip_distance', 0.097831781783953228)
-    ('display_name_uberX', 0.085968653767959577)
-    ('display_name_uberBLACK', 0.055809745694839055)
-    ('city_seattle', 0.041266396367005236)
-    ('city_ny', 0.035409041602259689)
-    ('city_denver', 0.01865789832987827)
-    ('display_name_uberXL', 0.018290636329722696)
-    ('display_name_uberESPANOL', 0.01731926767473092)
-    ('display_name_uberSELECT', 0.016296225095864675)
-    ('city_sf', 0.013362568284479584)
-    ('display_name_uberFAMILY', 0.011900193110712545)
-    ('display_name_uberTAXI', 0.0053023498845518368)
-    ('display_name_uberPEDAL', 0.0041246772754761048)
-    """
+    MSE with best XGBRegressor: 3.56250306839
+    MSE with default param: 26.4087698116
 
-    """
-    With surge multiplier, week 14 predictions:
+    RidgeCV MSE: 119.975705522
+    LassoCV MSE: 777.969930913
+    ElasticNetCV MSE: 785.696049558
 
-    ('display_name_uberSUV', 0.28156529820578796)
-    ('trip_distance', 0.17386787481727198)
-    ('display_name_uberBLACK', 0.15105326480490774)
-    ('trip_duration', 0.12405091650062343)
-    ('surge_multiplier', 0.095744259344206009)
-    ('display_name_uberWAV', 0.06128319437327865)
-    ('display_name_uberX', 0.026588448626477423)
-    ('display_name_uberXL', 0.019741683016970161)
-    ('display_name_uberSELECT', 0.016919647962355146)
-    ('city_ny', 0.016547926784837016)
-    ('display_name_uberESPANOL', 0.015035628528900597)
-    ('city_seattle', 0.0092183694111987111)
-    ('city_sf', 0.0037929761758299907)
-    ('pickup_estimate', 0.0016991033673227963)
-    ('display_name_uberFAMILY', 0.0013389520832636254)
-    ('city_denver', 0.00029488467750748992)
-    ('display_name_uberTAXI', 0.00019888029444719031)
-    ('display_name_uberWARMUP', 0.00015433717504211345)
-    ('weekofyear', 0.0001082871211898807)
-    ('dayofweek_2', 0.00010365204867123911)
-    ('dayofweek_4', 9.6276784885273946e-05)
-    ('hour_6', 7.7131736607251585e-05)
-    ('hour_7', 6.0289433406320183e-05)
-    ('display_name_uberPEDAL', 5.6811952373247677e-05)
-    ('hour_4', 4.8798261917506261e-05)
-    ('dayofweek_3', 4.8087045900860311e-05)
-    ('display_name_uberTAHOE', 3.2908466222634051e-05)
-    ('hour_17', 2.6315613136821515e-05)
-    ('hour_11', 2.6295081924580555e-05)
-    ('hour_15', 2.3549520986304168e-05)
-    ('hour_5', 2.2416132868638021e-05)
-    ('dayofweek_1', 2.1325986219720821e-05)
-    ('hour_16', 1.6482223851737059e-05)
-    ('hour_12', 1.3402264159827176e-05)
-    ('hour_14', 1.3103875331400295e-05)
-    ('hour_18', 1.2745491510340055e-05)
-    ('hour_2', 1.1210860588588259e-05)
-    ('hour_19', 1.1101405245830553e-05)
-    ('hour_8', 9.8018692204899525e-06)
-    ('dayofweek_6', 9.6259623977638091e-06)
-    ('dayofweek_5', 8.8389207543897053e-06)
-    ('hour_20', 8.6190750627970933e-06)
-    ('hour_13', 7.514480751485061e-06)
-    ('hour_3', 7.2361288056986364e-06)
-    ('hour_22', 5.630772279482073e-06)
-    ('hour_9', 5.3823984167670465e-06)
-    ('hour_21', 4.1433315946478496e-06)
-    ('hour_1', 3.9336987278618334e-06)
-    ('hour_10', 2.3299191862041496e-06)
-    ('hour_23', 1.1059855764074888e-06)
+    ARIMA KFold0, MSE: 209.41649901
+    ARIMA KFold1, MSE: 220.637841507
+    ARIMA KFold2, MSE: 241.211876874
+    ARIMA KFold3, MSE: 298.040536076
+    ARIMA KFold4, MSE: 272.382357559
+    ARIMA KFold5, MSE: 198.33950856
+    ARIMA KFold6, MSE: 273.476545115
+
+    ARIMA(5,0,5) with non-zero mean
+    AIC=42412.19   AICc=42412.46   BIC=42591.05
     """

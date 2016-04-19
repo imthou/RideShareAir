@@ -1,4 +1,4 @@
-##Ride Share Air
+##Ride Share Air - www.rideshareair.com
 
 Used ensemble methods to forecast average ride share prices for Uber and Lyft from downtown of several cities to the airport.
 

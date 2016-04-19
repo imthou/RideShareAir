@@ -1,5 +1,7 @@
 *.json
 *.csv
+*.pkl
 data/
 static/
 examples/
+saved_models/

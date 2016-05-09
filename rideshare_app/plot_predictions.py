@@ -240,6 +240,7 @@ if __name__ == '__main__':
     session.publish()
     tag = autoload_server(vp, session, public=True)
 
+    t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     html = """
     {%% extends "base.html" %%}
     {%% block body %%}

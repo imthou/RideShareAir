@@ -14,6 +14,7 @@ from sklearn.linear_model import RidgeCV, LassoCV, ElasticNetCV, Ridge, Lasso, E
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 rforecast = rpackages.importr('forecast')
+import sys
 
 class UberModel(object):
     """
@@ -383,7 +384,7 @@ def plot_prediction_true_res(y_pred):
             plt.close('all')
 
 if __name__ == '__main__':
-    filename = 'data/organized_uber_41816.csv'
+    filename = sys.argv[1]  # 'data/organized_uber_41816.csv'
     ubm = UberModel(filename)
 
     # Subsetting by week -> array([ 7,  8,  9, 10, 11, 12, 13], dtype=int32)
@@ -398,31 +399,33 @@ if __name__ == '__main__':
     y_hold.pop('record_time')
 
     ### GridSearchCV for best parameters for RF
-    # rf_params = {'n_estimators': [10, 100, 200],
-    #                         'criterion': ['mse'],
-    #                         'min_samples_split': [2, 4, 6, 7],
-    #                         'min_samples_leaf': [1, 2],
-    #                         'max_features': ['sqrt',None,'log2']}
-    # gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), RandomForestRegressor(), custom_cv, rf_params)
+    rf_params = {'n_estimators': [10, 100, 200],
+                            'criterion': ['mse'],
+                            'min_samples_split': [2, 4, 6, 7],
+                            'min_samples_leaf': [1, 2],
+                            'max_features': ['sqrt',None,'log2']}
+    gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), RandomForestRegressor(), custom_cv, rf_params)
 
-    # xgb_params = {'max_depth': [2,4,6],
-    #                         'n_estimators': [50,100,200],
-    #                         'gamma': [0,1,2]}
-    # gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), XGBRegressor(), custom_cv, xgb_params)
+    plot_prediction_true_res(y_pred)
+    ubm.pickle_model(best_model, name='model1_w_surgemulti')
+    ubm.make_forecast(best_model, name='model1_w_surgemulti')
+
+    xgb_params = {'max_depth': [2,4,6],
+                            'n_estimators': [50,100,200],
+                            'gamma': [0,1,2]}
+    gridsearch, best_model, y_pred = ubm.perform_grid_search(X_train, X_hold, y_train.values.reshape(-1), y_hold.values.reshape(-1), XGBRegressor(), custom_cv, xgb_params)
+
+    plot_prediction_true_res(y_pred)
+    ubm.pickle_model(best_model, name='xgboost_model')
+    ubm.make_forecast(best_model, name='xgboost_model')
 
     ## Multiple Regression with CV
-    # for regression in [RidgeCV(scoring='mean_squared_error', cv=custom_cv), LassoCV(cv=custom_cv, n_jobs=-1), ElasticNetCV(cv=custom_cv, n_jobs=-1)]:
-    #     ubm.run_linear_models(regression, X_train, y_train.values.reshape(-1), X_hold, y_hold.values.reshape(-1))
+    for regression in [RidgeCV(scoring='mean_squared_error', cv=custom_cv), LassoCV(cv=custom_cv, n_jobs=-1), ElasticNetCV(cv=custom_cv, n_jobs=-1)]:
+        ubm.run_linear_models(regression, X_train, y_train.values.reshape(-1), X_hold, y_hold.values.reshape(-1))
 
     ## ARIMA in R with CV
     ubm.run_arima_cv(X_train, y_train, custom_cv)
     ubm.forecast_with_arima(X_hold, y_hold)
-    #
-    # plot_prediction_true_res(y_pred)
-    #
-    # ubm.pickle_model(best_model, name='xgboost_model')
-    #
-    # ubm.make_forecast(best_model, name='xgboost_model')
 
     ### Cross val score with baseline RF and XGB
     # rf = RandomForestRegressor(n_estimators=10)

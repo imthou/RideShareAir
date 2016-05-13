@@ -12,54 +12,54 @@ class UberParse(object):
     def __init__(self, filename):
         """
         Input: Store the filename
+
+        Store filename, keys of dictionaries, and empty dataframe
         """
         self.filename = filename
+        self.keys = ['products:','times','prices']
+        self.dfs = []
 
     def run(self):
         """
         Output: Runs the parsing and merging functions and exports the dataframe into a csv file
         """
-        data = self.parse_json()
-        self.merge_dfs(data)
+        self._parse_json()
+        self._merge_dfs()
         self.df = pd.concat(self.dfs)
         self.df.drop(['price_details'],axis=1,inplace=True)
         self.df.to_csv('data/uber_data_{}.csv'.format(self.filename.split('_')[1].split('.')[0]), index=False, encoding='utf-8')
         print "finished parsing uber data to {}".format(self.filename.split('_')[1].split('.')[0])
 
-    def parse_json(self):
+    def _parse_json(self):
         """
         Output: List of Json Documents
 
         Loads all of the Mongodb documents and converts them into json documents
         """
         with open(self.filename) as f:
-            data = [json.loads(doc) for doc in f]
-        return data
+            self.data = [json.loads(doc) for doc in f]
 
-    def merge_dfs(self, data):
+    def _merge_dfs(self):
         """
         Input: List of Json documents
         Output: DataFrame
 
         Merged dataframe of Uber data
         """
-        keys = ['products:','times','prices']
-        dfs = []
-        for i,d in enumerate(data):
-            record = pd.DataFrame({k:v for k,v in d.iteritems() if k not in keys}, index=[0]).drop('_id',axis=1)
+        for i,d in enumerate(self.data):
+            self.record = pd.DataFrame({k:v for k,v in d.iteritems() if k not in self.keys}, index=[0]).drop('_id',axis=1)
             try:
-                products, times, prices = [json_normalize(d[k]) for k in keys]
-                times.drop(['display_name','localized_display_name'],axis=1,inplace=True)
-                prices.drop(['currency_code','display_name','localized_display_name'],axis=1,inplace=True)
-                others = products.merge(times, left_on='product_id', right_on='product_id').merge(prices, left_on='product_id', right_on='product_id')
-                others['city'] = record['city']
-                others['city'] = others['city'].apply(lambda x: others['city'][0])
-                dfs.append(others.merge(record, how='outer'))
+                self.products, self.times, self.prices = [json_normalize(d[k]) for k in self.keys]
+                self.times.drop(['display_name','localized_display_name'],axis=1,inplace=True)
+                self.prices.drop(['currency_code','display_name','localized_display_name'],axis=1,inplace=True)
+                self.others = self.products.merge(self.times, left_on='product_id', right_on='product_id').merge(self.prices, left_on='product_id', right_on='product_id')
+                self.others['city'] = self.record['city']
+                self.others['city'] = self.others['city'].apply(lambda x: self.others['city'][0])
+                self.dfs.append(self.others.merge(self.record, how='outer'))
             except:
                 print "error in json_normalize"
             if i % 50 == 0:
-                print "progress: {}, {:.2f}%".format(i, float(i)/len(data) * 100.0)
-        self.dfs = dfs
+                print "progress: {}, {:.2f}%".format(i, float(i)/len(self.data) * 100.0)
 
 if __name__ == '__main__':
     filename = sys.argv[1]

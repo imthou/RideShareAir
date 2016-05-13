@@ -27,7 +27,7 @@ collection = db['uberapi']
 model1_file = 'data/model1_w_surgemulti_forecast.csv'
 # model2_file = 'data/model2_wo_surgemulti_forecast.csv'
 model3_file = 'data/ridgecv_uber_forecast.csv'
-model4_file = 'data/arima_forecast.csv'
+model4_file = 'data/uber_arima_forecast.csv'
 model5_file = 'data/xgboost_model_forecast.csv'
 
 def get_forecast_data(forecast_file):

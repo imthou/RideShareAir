@@ -18,12 +18,12 @@ import sys
 
 class RideShareModel(object):
     """
-    Builds several Uber prediction models
+    Builds several Ride Share prediction models
     """
 
     def __init__(self, filename):
         """
-        Input: Organized pandas Dataframe with Uber data
+        Input: Organized pandas Dataframe with RideShare data
         """
         self.filename = filename
         self.df = pd.read_csv(self.filename, parse_dates=['record_time'])
@@ -345,7 +345,7 @@ class RideShareModel(object):
         self.r_pred = robjects.r("""y_pred['mean']""")[0]
         self.y_pred = [self.r_pred[i] for i in range(len(self.r_pred))]
 
-    def _run_linear_models(self, estimator, company):
+    def _run_linear_models(self, estimator):
         """
         Output: Best Model
 

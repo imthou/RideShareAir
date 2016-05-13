@@ -238,7 +238,7 @@ if __name__ == '__main__':
     ip = load(urlopen('http://jsonip.com'))['ip']
     session = cursession()
     session.publish()
-    tag = autoload_server(vp, session, public=True)
+    tag = autoload_server(vp, session, public=True).replace("localhost", ip)
 
     t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
     html = """

@@ -7,6 +7,7 @@ from bokeh.plotting import figure, vplot, output_server, show, push, cursession,
 from bokeh.models import HoverTool, PanTool, BoxZoomTool, ResizeTool, WheelZoomTool, PreviewSaveTool, ResetTool
 from bokeh.models.formatters import DatetimeTickFormatter, PrintfTickFormatter
 from bokeh.models.widgets import Panel, Tabs
+from bokeh.session import Session
 from json import load
 from urllib2 import urlopen
 from bokeh.embed import autoload_server
@@ -14,7 +15,8 @@ from pymongo import MongoClient
 import time
 import os
 
-output_server("predictions")
+ssn = Session(load_from_config=False)
+output_server("predictions", session=ssn)
 
 ec2host = os.environ['EC2HOST']
 client = MongoClient(host=ec2host,
@@ -45,8 +47,8 @@ def mongo_query():
 
     Queries Mongo Database on EC2
     """
-    start_date = (pd.to_datetime('2016-04-18') + pd.Timedelta(hours=7)).value // 10**9
-    end_date = (pd.to_datetime('2016-04-24') + pd.Timedelta(hours=7)).value // 10**9
+    start_date = (pd.to_datetime('2016-05-09') + pd.Timedelta(hours=7)).value // 10**9
+    end_date = (pd.to_datetime('2016-05-15') + pd.Timedelta(hours=7)).value // 10**9
     docs = collection.find({'record_time':{'$gte':start_date,
                                     '$lte':end_date}},
                             {'record_time': 1, 'city':1, 'prices':1, '_id':0})
@@ -164,9 +166,9 @@ def create_plots(model1, model3, model4, model5, live_data, city, display_name):
         ]
     )
     change_city = {'denver':'Denver','ny':'New York','chicago':'Chicago','seattle':'Seattle','sf':'San Francisco'}
-    p = figure(title="Forecast of {} {} Prices - 4/18/16 to 4/24/16".format(change_city[city], display_name),
+    p = figure(title="Forecast of {} {} Prices - 5/9/16 to 5/15/16".format(change_city[city], display_name),
                     plot_width=1000, plot_height=500, x_axis_type="datetime",
-                    tools=[hover, PanTool(), BoxZoomTool(), ResizeTool(), WheelZoomTool(), PreviewSaveTool(), ResetTool()], toolbar_location="left", title_text_font_size="25pt")
+                    tools=[hover, PanTool(), BoxZoomTool(), ResizeTool(), WheelZoomTool(), PreviewSaveTool(), ResetTool()], toolbar_location="left", title_text_font_size="20pt")
 
     p.line(model1['record_time'], model1['y_forecast'], line_color='blue', line_width=2, legend="Random Forest Regressor", alpha=0.5, source=source1)
     # p.line(model2['record_time'], model2['y_forecast'], line_color='green', line_width=2, legend="RF Model 2 - Without Surge Multiplier", alpha=0.5, source=source2) # line_dash=[4,4]

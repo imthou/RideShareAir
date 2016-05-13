@@ -2,18 +2,19 @@ import pandas as pd
 import numpy as np
 import json
 from pandas.io.json import json_normalize
+import sys
 
 class LyftParse(object):
     """
     Parses Lyft data and organizes it into a Dataframe
     """
-    def __init__(self):
+    def __init__(self, filename):
         """
         Output: List of dictionaries
 
         Loads JSON documents and transforms to list of dictionaries
         """
-        filename = "data/lyft1_41416.json"
+        self.filename = filename.split("_")[1].split(".")[0]
         with open(filename) as f:
             self.data = [json.loads(line) for line in f]
 
@@ -56,11 +57,12 @@ class LyftParse(object):
 
         Saves Dataframe to CSV file
         """
-        filename = "data/lyft_data.csv"
+        filename = "data/lyft_data_{}.csv".format(self.filename)
         self.df.to_csv(filename, index=False)
         print "saved file to {}".format(filename)
 
 if __name__ == '__main__':
-    lp = LyftParse()
+    filename = sys.argv[1] #"data/lyft1_41416.json"
+    lp = LyftParse(filename)
     lp.parse_lyft_data()
     lp.save_data_csv()

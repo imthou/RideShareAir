@@ -64,5 +64,9 @@ def forecast():
 def model():
     return render_template("model.html")
 
+@app.route("/lyft_model")
+def lyft_model():
+    return render_template("lyft_model.html")
+
 if __name__ == "__main__":
     app.run(debug=True)

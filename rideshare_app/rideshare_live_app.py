@@ -4,6 +4,7 @@ import pandas as pd
 app = Flask(__name__)
 
 model1_file = 'data/model1_w_surgemulti_forecast.csv'
+lyft_file = 'data/lyft_rf_model_forecast.csv'
 
 def get_forecast_data(forecast_file):
     """
@@ -23,14 +24,24 @@ def get_price(city, cartype, dayofweek):
 
     Output: Average Price for that day, Max Price, Min Price
     """
+    print city, cartype, dayofweek
     change_day = {"monday":0,"tuesday":1,"wednesday":2,
     "thursday":3,"friday":4,"saturday":5,"sunday":6}
-    forecast = get_forecast_data(model1_file)
-    dayofweek = change_day[dayofweek]
-    if city != 'chicago':
-        results = forecast.query("city_{} == 1 and display_name_{} == 1 and dayofweek == {}".format(city.lower(), cartype, dayofweek))[['date','hour','y_forecast']]
+    if 'lyft' in cartype:
+        forecast = get_forecast_data(lyft_file)
+        dayofweek = change_day[dayofweek]
+        if city != 'chicago':
+            results = forecast.query("city_{} == 1 and ride_type_{} == 1 and dayofweek == {}".format(city.lower(), cartype, dayofweek))[['date','hour','y_forecast']]
+        else:
+            results = forecast.query("city_denver == 0 and city_sf == 0 and city_ny == 0 and city_seattle == 0 and ride_type_{} == 1 and dayofweek == {}".format(cartype, dayofweek))[['date','hour','y_forecast']]
+            print results
     else:
-        results = forecast.query("city_denver == 0 and city_sf == 0 and city_ny == 0 and city_seattle == 0 and display_name_{} == 1 and dayofweek == {}".format(cartype, dayofweek))[['date','hour','y_forecast']]
+        forecast = get_forecast_data(model1_file)
+        dayofweek = change_day[dayofweek]
+        if city != 'chicago':
+            results = forecast.query("city_{} == 1 and display_name_{} == 1 and dayofweek == {}".format(city.lower(), cartype, dayofweek))[['date','hour','y_forecast']]
+        else:
+            results = forecast.query("city_denver == 0 and city_sf == 0 and city_ny == 0 and city_seattle == 0 and display_name_{} == 1 and dayofweek == {}".format(cartype, dayofweek))[['date','hour','y_forecast']]
     return results
 
 @app.route("/")
@@ -69,4 +80,4 @@ def lyft_model():
     return render_template("lyft_model.html")
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8000, debug=True)

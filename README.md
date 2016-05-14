@@ -30,6 +30,7 @@ Ensemble methods, ARIMA, and Multiple Regression models were tested to see which
 
 ###Hurdles
 
-The biggest challenge coming into this project was the time constraint on data collection. Since the data needed to be gather consistently, there would be limitations on how much seasonal patterns and trends would be captured. In particular, the Lyft API was just launched last March, therefore, the long-term functionality of the forecast model based on current data is unknown.
+~~The biggest challenge coming into this project was the time constraint on data collection. Since the data needed to be gather consistently, there would be limitations on how much seasonal patterns and trends would be captured. In particular, the Lyft API was just launched last March, therefore, the long-term functionality of the forecast model based on current data is unknown.~~
+There are inconsistencies in the fluctuation in Lyft prices currently. There are probably more features I need to more accurately forecast the prices.
 
 ![Forecast of NY Prices](images/diff_uber_lyft2.png)

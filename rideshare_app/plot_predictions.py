@@ -47,8 +47,9 @@ def mongo_query():
 
     Queries Mongo Database on EC2
     """
+    # monday to monday
     start_date = (pd.to_datetime('2016-05-09') + pd.Timedelta(hours=7)).value // 10**9
-    end_date = (pd.to_datetime('2016-05-15') + pd.Timedelta(hours=7)).value // 10**9
+    end_date = (pd.to_datetime('2016-05-16') + pd.Timedelta(hours=7)).value // 10**9
     docs = collection.find({'record_time':{'$gte':start_date,
                                     '$lte':end_date}},
                             {'record_time': 1, 'city':1, 'prices':1, '_id':0})
@@ -253,7 +254,7 @@ if __name__ == '__main__':
     with open('templates/model.html', 'w+') as f:
         f.write(html)
 
-    print "plots ready for deployment"
+    print "plots ready for deployment: {}".format(t)
 
     while True:
         time.sleep(3600)

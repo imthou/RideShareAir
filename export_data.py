@@ -15,8 +15,12 @@ if __name__ == '__main__':
     # Monday to Monday, e.g. 2016-05-16 to 2016-05-23
     start_date = (pd.to_datetime(sys.argv[1]) + pd.Timedelta(hours=7)).value // 10**9
     end_date = (pd.to_datetime(sys.argv[2]) + pd.Timedelta(hours=7)).value // 10**9
+    filename = sys.argv[3]
     print "start date value: {}".format(start_date)
     print "end date value: {}".format(end_date)
+    command = """mongoexport --db apidata --collection uberapi --query '{"record_time" : {"$gte": %d, "$lte": %d}}' --out %s""" % (start_date,end_date,filename)
+    os.system(command)
+
     """
     docs = ubercoll.find({'record_time':{'$gte':start_date,
                                     '$lte':end_date}},

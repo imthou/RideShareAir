@@ -202,6 +202,7 @@ class RideShareModel(object):
                                          verbose=True,
                                          scoring='mean_squared_error',
                                          cv=self.kfold_indices)
+            self.gridsearch.fit(self.X_train_nort, self.y_train_nort.values.reshape(-1))
         else:
             self.gridsearch = GridSearchCV(estimator,
                                          params,
@@ -209,7 +210,7 @@ class RideShareModel(object):
                                          verbose=True,
                                          cv=self.kfold_indices)
 
-        self.gridsearch.fit(self.X_train_nort, self.y_train_nort.values.reshape(-1))
+            self.gridsearch.fit(self.X_train_nort, self.y_train_nort.values.reshape(-1))
 
         print "best parameters {}: {}".format(estimator.__class__.__name__, self.gridsearch.best_params_)
 
@@ -475,16 +476,8 @@ if __name__ == '__main__':
     rsm._run_models()
 
     """
-    Retrieved data up to week 14:
-
-    best parameters: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 100}
-    MSE with best rf: 0.942149836266
-    MSE with default param rf: 10.9731377293
-
-    Retrieved data up to week 15:
-
-    MSE with best RandomForestRegressor: 1.96134408573
-    MSE with default param: 15.3924882909
+    MSE with best RandomForestRegressor: 5.0615018927
+    MSE with default param: 18.657508722
 
     MSE with best XGBRegressor: 3.56250306839
     MSE with default param: 26.4087698116

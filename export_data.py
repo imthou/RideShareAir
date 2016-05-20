@@ -25,7 +25,7 @@ if __name__ == '__main__':
     docs = ubercoll.find({'record_time':{'$gte':start_date,
                                     '$lte':end_date}},
                             {'record_time': 1, 'city':1, 'prices':1, '_id':0})
-    db.uberapi.find({"record_time" : {"$gte": new Date(2016, 4, 9).getTime() / 1000 + 25200,"$lte": new Date(2016, 4, 16).getTime() / 1000 + 25200}}).count()
+    db.uberapi.find({"record_time" : {"$gte": new Date(2016, 4, 16).getTime() / 1000 + 25200,"$lte": new Date(2016, 4, 23).getTime() / 1000 + 25200}}).count()
 
     mongoexport --db apidata --collection uberapi --query '{"record_time" : {"$gte": new Date(2016, 4, 9).getTime() / 1000 + 25200, "$lte": new Date(2016, 4, 16).getTime() / 1000 + 25200 }}' --out uber9_50916.json
 

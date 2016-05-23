@@ -16,9 +16,13 @@ if __name__ == '__main__':
     start_date = (pd.to_datetime(sys.argv[1]) + pd.Timedelta(hours=7)).value // 10**9
     end_date = (pd.to_datetime(sys.argv[2]) + pd.Timedelta(hours=7)).value // 10**9
     filename = sys.argv[3]
+    datatype = sys.argv[4]
     print "start date value: {}".format(start_date)
     print "end date value: {}".format(end_date)
-    command = """mongoexport --db apidata --collection uberapi --query '{"record_time" : {"$gte": %d, "$lte": %d}}' --out %s""" % (start_date,end_date,filename)
+    if datatype == "uber":
+        command = """mongoexport --db apidata --collection uberapi --query '{"record_time" : {"$gte": %d, "$lte": %d}}' --out %s""" % (start_date,end_date,filename)
+    else:
+        command = """mongoexport --db lyftdata --collection lyftapi --query '{"record_time" : {"$gte": %d, "$lte": %d}}' --out %s""" % (start_date,end_date,filename)
     os.system(command)
 
     """

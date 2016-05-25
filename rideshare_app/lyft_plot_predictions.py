@@ -14,6 +14,7 @@ from bokeh.embed import autoload_server
 from pymongo import MongoClient
 import time
 import os
+import sys
 
 ssn = Session(load_from_config=False)
 output_server("lyft_predictions", session=ssn)

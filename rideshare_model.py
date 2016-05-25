@@ -65,7 +65,7 @@ class RideShareModel(object):
         """
         if weekly:
             # modified to exclude the current week prices
-            self.total_folds = self.df['weekofyear'].unique()[:-1]
+            self.total_folds = self.df['weekofyear'].unique()
             print "total weeks:", self.total_folds
             # leaves out the latest week based on the order of the array which might be a problem when it predicts the next year
             lo = self.total_folds[-leaveout:][0]

@@ -47,8 +47,8 @@ def mongo_query():
 
     Queries Mongo Database on EC2
     """
-    start_date = (pd.to_datetime('2016-05-09') + pd.Timedelta(hours=7)).value // 10**9
-    end_date = (pd.to_datetime('2016-05-16') + pd.Timedelta(hours=7)).value // 10**9
+    start_date = (pd.to_datetime(sys.argv[1]) + pd.Timedelta(hours=7)).value // 10**9
+    end_date = (pd.to_datetime(sys.argv[2]) + pd.Timedelta(hours=7)).value // 10**9
     docs = collection.find({'record_time':{'$gte':start_date,
                                     '$lte':end_date}},
                             {'record_time': 1, 'city':1, 'cost':1, '_id':0})
@@ -164,7 +164,7 @@ def create_plots(model1, model3, model4, model5, live_data, city, display_name):
         ]
     )
     change_city = {'denver':'Denver','ny':'New York','chicago':'Chicago','seattle':'Seattle','sf':'San Francisco'}
-    p = figure(title="Forecast of {} {} Prices - 5/9/16 to 5/15/16".format(change_city[city], display_name),
+    p = figure(title="Forecast of {} {} Prices - {} to {}".format(change_city[city], display_name, sys.argv[1], sys.argv[2]),
                     plot_width=1000, plot_height=500, x_axis_type="datetime",
                     tools=[hover, PanTool(), BoxZoomTool(), ResizeTool(), WheelZoomTool(), PreviewSaveTool(), ResetTool()], toolbar_location="left", title_text_font_size="20pt")
 

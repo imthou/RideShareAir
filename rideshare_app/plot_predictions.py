@@ -84,7 +84,7 @@ def mongo_query():
     return hourly
 
 # def create_plots(model1, model2, model3, model4, model5, live_data, city, display_name):
-def create_plots(model1, model3, model4, model5, live_data, city, display_name):
+def create_plots(model1, model3, model5, live_data, city, display_name):
     """
     Output: Bokeh plot
 

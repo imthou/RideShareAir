@@ -223,7 +223,7 @@ def callback(session, new_pts):
     """
     Makes a callback to EC2 Mongo Database every hour to update price data
     """
-    print "collecting data again: {}", pd.to_datetime(time.time(), unit='s')
+    print "collecting data again: {}".format(pd.to_datetime(time.time(), unit='s'))
     live_data = mongo_query()
     print live_data.tail()
     for city, cartype, ds in new_pts:
@@ -261,3 +261,5 @@ if __name__ == '__main__':
         time.sleep(3600)
         print "pulling data from Mongo EC2 again"
         callback(session, new_pts)
+        t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+        print "plots ready for deployment: {}".format(t)

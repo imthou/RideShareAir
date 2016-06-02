@@ -166,10 +166,10 @@ class RideShareModel(object):
             self._make_forecast(self.best_model, name='xgboost_model')
 
         # Multiple Regression with CV
-        for regression in [RidgeCV(scoring='mean_squared_error', cv=self.kfold_indices), LassoCV(cv=self.kfold_indices, n_jobs=-1), ElasticNetCV(cv=self.kfold_indices, n_jobs=-1)]:
+        for regression in [RidgeCV(scoring='mean_squared_error', cv=self.kfold_indices, alphas=np.logspace(-3,1,100)), LassoCV(cv=self.kfold_indices, n_jobs=-1, alphas=np.logspace(-3,1,100)), ElasticNetCV(cv=self.kfold_indices, n_jobs=-1, l1_ratio=np.linspace(0.001,1,100), alphas=np.logspace(-3,1,100))]:
             self._run_linear_models(regression)
 
-        ## ARIMA in R with CV
+        # ARIMA in R with CV
         self._run_arima_cv()
         self._forecast_with_arima()
 

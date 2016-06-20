@@ -15,6 +15,7 @@ import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 rforecast = rpackages.importr('forecast')
 import sys
+from collections import OrderedDict
 
 class RideShareModel(object):
     """
@@ -55,6 +56,8 @@ class RideShareModel(object):
             self.hourly = pd.get_dummies(self.hourly[self.features], columns=['city','display_name','hour','dayofweek']).drop(['city_chicago','display_name_uberASSIST','hour_0','dayofweek_0'], axis=1)
         self.df = self.hourly.dropna()
         self.kfold_indices = []
+        self.model_results = OrderedDict()
+        self.model_params = OrderedDict()
 
     def _make_holdout_split(self, leaveout=1, weekly=False):
         """
@@ -76,7 +79,7 @@ class RideShareModel(object):
             self.hold_set = hold_set.copy()
             # print self.train_set.weekofyear.unique()
             # print self.hold_set.weekofyear.unique()
-            if 'lyft' in filename:
+            if 'lyft' in self.filename:
                 y_train = train_set.pop("avg_est_price")
                 y_hold = hold_set.pop("avg_est_price")
             else:
@@ -95,7 +98,7 @@ class RideShareModel(object):
         self.kfolds = self.X_train['weekofyear'].unique()
         self.num_folds = self.kfolds.shape[0]-1
         for i in xrange(self.num_folds):
-            if i-lag < 0:
+            if i-lag < 0: # prevents errors when lag is greater than the available data avaliable at that fold
                 train_set = self.X_train.query("weekofyear <= @self.kfolds[@i]")
                 self.train_indices = train_set.index.values
                 print 'train_set', train_set.weekofyear.unique()
@@ -103,7 +106,7 @@ class RideShareModel(object):
                 train_set = self.X_train.query("weekofyear <= @self.kfolds[@i] and weekofyear > @self.kfolds[@i-@lag]")
                 self.train_indices = train_set.index.values
                 print 'train_set', train_set.weekofyear.unique()
-            if i+ahead > self.num_folds:
+            if i+ahead > self.num_folds: # prevents errors when ahead is greater than the n folds
                 test_set = self.X_train.query("weekofyear >= @self.kfolds[@i+1]")
                 self.test_indices = test_set.index.values
                 print 'test_set', test_set.weekofyear.unique()
@@ -112,6 +115,7 @@ class RideShareModel(object):
                 self.test_indices = test_set.index.values
                 print 'test_set', test_set.weekofyear.unique()
             self.kfold_indices.append((self.train_indices, self.test_indices))
+        print "number of kfolds:", len(self.kfold_indices)
 
     def _pop_record_time(self):
         """
@@ -136,7 +140,7 @@ class RideShareModel(object):
 
         self._pop_record_time()
 
-        ### GridSearchCV for best parameters for RF
+        # ### GridSearchCV for best parameters for RF
         self.rf_params = {'n_estimators': [10, 100, 200],
                                 'criterion': ['mse'],
                                 'min_samples_split': [2, 4, 6, 7],
@@ -157,7 +161,7 @@ class RideShareModel(object):
                                 'gamma': [0,1,2]}
         self._perform_grid_search(XGBRegressor(), self.xgb_params)
 
-        self._plot_prediction_true_res()
+        # self._plot_prediction_true_res()
         if 'lyft' in self.filename:
             self._pickle_model(self.best_model, name='lyft_xgboost_model')
             self._make_forecast(self.best_model, name='lyft_xgboost_model')
@@ -212,13 +216,16 @@ class RideShareModel(object):
 
             self.gridsearch.fit(self.X_train_nort, self.y_train_nort.values.reshape(-1))
 
+        self.model_params[estimator.__class__.__name__] = self.gridsearch.best_params_
         print "best parameters {}: {}".format(estimator.__class__.__name__, self.gridsearch.best_params_)
 
         self.best_model = self.gridsearch.best_estimator_
 
         self.y_pred = self.best_model.predict(self.X_hold_nort)
 
-        print "MSE with best {}: {}".format(estimator.__class__.__name__, mean_squared_error(y_true=self.y_hold_nort.values.reshape(-1), y_pred=self.y_pred))
+        results = mean_squared_error(y_true=self.y_hold_nort.values.reshape(-1), y_pred=self.y_pred)
+        self.model_results[estimator.__class__.__name__] = results
+        print "MSE with best {}: {}".format(estimator.__class__.__name__, results)
 
         self.base_est = estimator
 
@@ -246,43 +253,49 @@ class RideShareModel(object):
             test_name = "data/uber_test_forecast.csv"
         train_set.to_csv(train_name)
         test_set.to_csv(test_name)
-        if 'lyft' in self.filename:
-            r = robjects.r("""
-            train_set = read.csv("{}")
-            test_set = read.csv("{}")
-            y = train_set['avg_est_price']
-            features = {}
-            X = train_set[features]
-            X_test = test_set[features]
-            fit = auto.arima(y, xreg=X)
-            y_pred = forecast(fit, xreg=X_test)
-            """.format(train_name, test_name, self.feats))
-        else:
-            r = robjects.r("""
-            train_set = read.csv("{}")
-            test_set = read.csv("{}")
-            y = train_set['avg_price_est']
-            features = {}
-            X = train_set[features]
-            X_test = test_set[features]
-            fit = auto.arima(y, xreg=X)
-            y_pred = forecast(fit, xreg=X_test)
-            """.format(train_name, test_name, self.feats))
-        print robjects.r("""y_pred['model']""")
-        self.r_lower = robjects.r("""y_pred['lower']""")[0]
-        self.r_upper = robjects.r("""y_pred['upper']""")[0]
-        self.r_pred = robjects.r("""y_pred['mean']""")[0]
-        self.y_pred = [self.r_pred[i] for i in range(len(self.r_pred))]
-        self.y_forecast = self.y_pred
-        self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
-        self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
-        if 'lyft' in self.filename:
-            self.arima_name = "lyft_arima"
-        else:
-            self.arima_name = "uber_arima"
-        self.saved_arima_filename = "rideshare_app/data/{}_forecast.csv".format(self.arima_name)
-        self.y_forecast.to_csv(self.saved_arima_filename)
-        print "saved prediction values to {}".format(self.saved_arima_filename)
+        print "forecast train_set size:", train_set.shape
+        print "forecast test_set size:", test_set.shape
+        try:
+            if 'lyft' in self.filename:
+                r = robjects.r("""
+                train_set = read.csv("{}")
+                test_set = read.csv("{}")
+                y = train_set['avg_est_price']
+                features = {}
+                X = train_set[features]
+                X_test = test_set[features]
+                fit = auto.arima(y, xreg=X)
+                y_pred = forecast(fit, xreg=X_test)
+                """.format(train_name, test_name, self.feats))
+            else:
+                r = robjects.r("""
+                train_set = read.csv("{}")
+                test_set = read.csv("{}")
+                y = train_set['avg_price_est']
+                features = {}
+                X = train_set[features]
+                X_test = test_set[features]
+                fit = auto.arima(y, xreg=X)
+                y_pred = forecast(fit, xreg=X_test)
+                """.format(train_name, test_name, self.feats))
+            print robjects.r("""y_pred['model']""")
+            self.model_params["ARIMA"] = robjects.r("""y_pred['method']""")[0][0]
+            self.r_lower = robjects.r("""y_pred['lower']""")[0]
+            self.r_upper = robjects.r("""y_pred['upper']""")[0]
+            self.r_pred = robjects.r("""y_pred['mean']""")[0]
+            self.y_pred = [self.r_pred[i] for i in range(len(self.r_pred))]
+            self.y_forecast = self.y_pred
+            self.y_forecast = pd.DataFrame(self.y_forecast, index=self.X_forecast.index, columns=['y_forecast'])
+            self.y_forecast = pd.concat([self.X_forecast, self.y_forecast], axis=1)
+            if 'lyft' in self.filename:
+                self.arima_name = "lyft_arima"
+            else:
+                self.arima_name = "uber_arima"
+            self.saved_arima_filename = "rideshare_app/data/{}_forecast.csv".format(self.arima_name)
+            self.y_forecast.to_csv(self.saved_arima_filename)
+            print "saved prediction values to {}".format(self.saved_arima_filename)
+        except:
+            print "No suitable ARIMA model found for forecasting"
 
     def _run_arima_cv(self):
         """
@@ -292,9 +305,17 @@ class RideShareModel(object):
         if 'lyft' in self.filename:
             self.rfeatures = ['eta_seconds','primetime_percentage','city_denver','cost_per_mile', 'city_ny', 'city_seattle','city_sf','ride_type_lyft','ride_type_lyft_plus']
         else:
-            self.rfeatures = ['trip_duration', 'trip_distance', 'pickup_estimate', 'surge_multiplier','city_denver', 'city_ny', 'city_seattle','city_sf','display_name_uberBLACK','display_name_uberSELECT','display_name_uberSUV','display_name_uberTAXI','display_name_uberX','display_name_uberXL']
+            self.rfeatures = ['trip_duration', 'trip_distance', 'pickup_estimate', 'surge_multiplier','city_denver', 'city_ny', 'city_seattle','city_sf','display_name_uberBLACK','display_name_uberSUV','display_name_uberX','display_name_uberXL'] # display_name_uberTAXI, display_name_uberSELECT
+        self.feats = 'c({})'.format(str(self.rfeatures)[1:-1])
+        print "number of kfolds:", len(self.kfold_indices)
         for i, (train_index, test_index) in enumerate(self.kfold_indices):
+            # if i <= 12:
+            #     continue
             train_fold = train_set.iloc[train_index]
+            print "size of training index {}:  {}".format(i, len(train_index))
+            # if len(train_index) < 4000:
+            #     print "insufficient training sample size"
+            #     continue
             if 'lyft' in self.filename:
                 train_name = "data/lyft_train{}.csv".format(i)
                 test_name = "data/lyft_test{}.csv".format(i)
@@ -303,13 +324,23 @@ class RideShareModel(object):
                 test_name = "data/uber_test{}.csv".format(i)
             train_fold.to_csv(train_name)
             test_fold = train_set.iloc[test_index]
+            print "size of testing index {}:  {}".format(i, len(test_index))
+            # if len(test_index) < 4000:
+            #     print "insufficient testing sample size"
+            #     continue
             test_fold.to_csv(test_name)
-            self._run_auto_arima(train_name, test_name)
-            if 'lyft' in self.filename:
-                self.y_true = test_fold['avg_est_price'].values
-            else:
-                self.y_true = test_fold['avg_price_est'].values
-            print "ARIMA KFold{}, MSE: {}".format(i, mean_squared_error(self.y_true, self.y_pred))
+            try:
+                self._run_auto_arima(train_name, test_name)
+                if 'lyft' in self.filename:
+                    self.y_true = test_fold['avg_est_price'].values
+                else:
+                    self.y_true = test_fold['avg_price_est'].values
+                results = mean_squared_error(self.y_true, self.y_pred)
+                self.model_results['ARIMA_{}'.format(i)] = results
+                print "ARIMA KFold{}, MSE: {}".format(i, results)
+            except:
+                print "No Suitable ARIMA model found"
+                continue
 
     def _run_auto_arima(self, train_name, test_name):
         """
@@ -317,7 +348,6 @@ class RideShareModel(object):
 
         Returns predictions from auto.arima model
         """
-        self.feats = 'c({})'.format(str(self.rfeatures)[1:-1])
         if 'lyft' in self.filename:
             self.r = robjects.r("""
             train_set = read.csv("{}")
@@ -356,10 +386,14 @@ class RideShareModel(object):
         self.est_name = estimator.__class__.__name__
         if self.est_name != 'ElasticNetCV':
             print "best param for {}: {}".format(self.est_name, estimator.alpha_)
+            self.model_params[self.est_name] = estimator.alpha_
         else:
             print "best param for {}: {}, {}".format(self.est_name, estimator.alpha_, estimator.l1_ratio_)
+            self.model_params[self.est_name] = [estimator.alpha_, estimator.l1_ratio_]
         self.y_pred = estimator.predict(self.X_hold_nort)
-        print "{} MSE: {}".format(self.est_name, mean_squared_error(self.y_hold_nort.values.reshape(-1), self.y_pred))
+        results = mean_squared_error(self.y_hold_nort.values.reshape(-1), self.y_pred)
+        self.model_results[self.est_name] = results
+        print "{} MSE: {}".format(self.est_name, results)
         self._pickle_model(estimator, name=self.est_name.lower() + self.company)
 
         if self.est_name != 'ElasticNetCV':
@@ -380,7 +414,7 @@ class RideShareModel(object):
 
         Pickles our model for later use
         """
-        with open("rideshare_app/data/{}.pkl".format(name), 'w') as f:
+        with open("rideshare_app/pkl_models/{}.pkl".format(name), 'w') as f:
             pickle.dump(model, f)
         print "{} is pickled.".format(name)
 
@@ -472,30 +506,78 @@ class RideShareModel(object):
 
 if __name__ == '__main__':
     filename = sys.argv[1]  # 'data/organized_uber_41816.csv'
+    # filename = 'data/uber_merged_62016.csv'
     rsm = RideShareModel(filename)
     rsm._run_models()
+    for k,v in rsm.model_results.iteritems():
+        print "Model: {},       MSE: {}".format(k,v)
+    for k,v in rsm.model_params.iteritems():
+        print "Model: {},       params: {}".format(k,v)
 
-    """
-    MSE with best RandomForestRegressor: 5.0615018927
-    MSE with default param: 18.657508722
+    """ 6-20-16
+    Uber:
+        best parameters RandomForestRegressor: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 10}
+        MSE with best RandomForestRegressor: 12.258573567
+        MSE with default param: 19.4791162034
 
-    MSE with best XGBRegressor: 3.56250306839
-    MSE with default param: 26.4087698116
+        best parameters XGBRegressor: {'n_estimators': 200, 'max_depth': 4, 'gamma': 2}
+        MSE with best XGBRegressor: 17.2513617447
+        MSE with default param: 30.1662634383
 
-    RidgeCV MSE: 119.975705522
-    LassoCV MSE: 777.969930913
-    ElasticNetCV MSE: 785.696049558
+        best param for RidgeCV: 0.001
+        RidgeCV MSE: 90.4906253044
+        best param for LassoCV: 0.001
+        LassoCV MSE: 90.4133364876
+        best param for ElasticNetCV: 0.001, 1.0
+        ElasticNetCV MSE: 90.4133364876
 
-    ARIMA KFold0, MSE: 209.41649901
-    ARIMA KFold1, MSE: 220.637841507
-    ARIMA KFold2, MSE: 241.211876874
-    ARIMA KFold3, MSE: 298.040536076
-    ARIMA KFold4, MSE: 272.382357559
-    ARIMA KFold5, MSE: 198.33950856
-    ARIMA KFold6, MSE: 273.476545115
-    ARIMA KFold7, MSE: 224.937488711
-    ARIMA KFold8, MSE: 242.966603036
+        ARIMA KFold0, MSE: 209.41649901
+        ARIMA KFold1, MSE: 220.637841507
+        ARIMA KFold2, MSE: 241.211876874
+        ARIMA KFold3, MSE: 298.040536076
+        ARIMA KFold4, MSE: 272.382357559
+        ARIMA KFold5, MSE: 198.33950856
+        ARIMA KFold6, MSE: 273.476545115
+        ARIMA KFold7, MSE: 224.937488711
+        ARIMA KFold8, MSE: 242.966603036
+        ARIMA KFold9, MSE: 186.266007076
+        ARIMA KFold10, MSE: 106.252699493
+        ARIMA KFold11, MSE: 89.3662169457
+        ARIMA KFold12, MSE: 110.89071845
 
-    ARIMA(5,0,5) with non-zero mean
-    AIC=42412.19   AICc=42412.46   BIC=42591.05
+        ARIMA KFold13, MSE: 122.361710872
+        ARIMA KFold14, MSE: 218.38183815
+        ARIMA KFold15, MSE: 224.359820751
+
+        ARIMA(5,0,5) with non-zero mean
+        AIC=41158.28   AICc=41158.5   BIC=41317.13
+
+    Lyft:
+        best parameters RandomForestRegressor: {'max_features': None, 'min_samples_split': 2, 'min_samples_leaf': 1, 'criterion': 'mse', 'n_estimators': 200}
+        MSE with best RandomForestRegressor: 9.01330786547
+        MSE with default param: 12.3387309831
+
+        best parameters XGBRegressor: {'n_estimators': 100, 'max_depth': 6, 'gamma': 1}
+        MSE with best XGBRegressor: 9.12105065966
+        MSE with default param: 12.258879546
+
+        best param for RidgeCV: 10.0
+        RidgeCV MSE: 24.7817085376
+        best param for LassoCV: 0.351119173422
+        LassoCV MSE: 26.9842571967
+        best param for ElasticNetCV: 0.151991108295, 0.001
+        ElasticNetCV MSE: 25.4088216239
+
+        ARIMA KFold0, MSE: 30.4710572333
+        ARIMA KFold1, MSE: 103.384083234
+        ARIMA KFold2, MSE: 23.1263255722
+        ARIMA KFold3, MSE: 49.7183093638
+        ARIMA KFold4, MSE: 41.5722764037
+        ARIMA KFold5, MSE: 139.904041974
+        ARIMA KFold6, MSE: 109.803295817
+        ARIMA KFold7, MSE: 46.1923982834
+        ARIMA KFold8, MSE: 66.2179242989
+
+        ARIMA(2,1,3)
+        AIC=15899.27   AICc=15899.46   BIC=15986.74
     """

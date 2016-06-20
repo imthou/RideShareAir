@@ -375,3 +375,34 @@ help(auto.arima)
 library(forecast)
 help(auto.arima)
 help(forecast)
+carat
+data(carat)
+data(cars)
+cars
+clear
+cls
+clear()
+pi
+1+2
+data = data(cars)
+data
+data[0]
+data
+data(cars)
+df = data(cars)
+data(cars)
+cars
+cars = data(cars)
+cars
+data(cars)
+cars
+pi
+1+2
+data(cars)
+cars
+ls()
+dir()
+getwd()
+library(forecast)
+c('features')
+c('features','features2')
